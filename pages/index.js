@@ -120,6 +120,9 @@ export default function Dashboard() {
   const [clearPostsConfirm, setClearPostsConfirm] = useState(false);
   const [calendarMode, setCalendarMode] = useState('month');
   const [calendarFocus, setCalendarFocus] = useState(today);
+  const [reviewView, setReviewView] = useState('list');
+  const [reviewCalMode, setReviewCalMode] = useState('month');
+  const [reviewCalFocus, setReviewCalFocus] = useState(today);
   const [highlightedSlotId, setHighlightedSlotId] = useState(null);
 
   // ── Live article library ─────────────────────
@@ -1295,29 +1298,181 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Platform tabs */}
-                <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap', alignItems:'center' }}>
-                  {PLATFORMS_LIST.map(p=>(
-                    <button key={p} onClick={()=>setActivePlatform(p)} style={{
-                      padding:'6px 16px', borderRadius:20, cursor:'pointer', fontSize:13,
-                      border:`1.5px solid ${activePlatform===p?PLATFORM_COLORS[p]:BORDER}`,
-                      background:activePlatform===p?PLATFORM_COLORS[p]:'#fff',
-                      color:activePlatform===p?'#fff':'#374151', fontWeight:activePlatform===p?600:400,
-                    }}>
-                      {PLATFORM_LABELS[p]}
-                    </button>
-                  ))}
-                  <button onClick={()=>setActivePlatform('universal')} style={{
-                    padding:'6px 16px', borderRadius:20, cursor:'pointer', fontSize:13,
-                    border:`1.5px solid ${activePlatform==='universal'?BLUE:BORDER}`,
-                    background:activePlatform==='universal'?BLUE:'#fff',
-                    color:activePlatform==='universal'?'#fff':'#374151',
-                    fontWeight:activePlatform==='universal'?600:400,
-                  }}>Universal</button>
+                {/* View toggle + platform tabs row */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+                  {/* Platform tabs (only in list view) */}
+                  {reviewView === 'list' && (
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+                      {PLATFORMS_LIST.map(p=>(
+                        <button key={p} onClick={()=>setActivePlatform(p)} style={{
+                          padding:'6px 16px', borderRadius:20, cursor:'pointer', fontSize:13,
+                          border:`1.5px solid ${activePlatform===p?PLATFORM_COLORS[p]:BORDER}`,
+                          background:activePlatform===p?PLATFORM_COLORS[p]:'#fff',
+                          color:activePlatform===p?'#fff':'#374151', fontWeight:activePlatform===p?600:400,
+                        }}>
+                          {PLATFORM_LABELS[p]}
+                        </button>
+                      ))}
+                      <button onClick={()=>setActivePlatform('universal')} style={{
+                        padding:'6px 16px', borderRadius:20, cursor:'pointer', fontSize:13,
+                        border:`1.5px solid ${activePlatform==='universal'?BLUE:BORDER}`,
+                        background:activePlatform==='universal'?BLUE:'#fff',
+                        color:activePlatform==='universal'?'#fff':'#374151',
+                        fontWeight:activePlatform==='universal'?600:400,
+                      }}>Universal</button>
+                    </div>
+                  )}
+                  {reviewView === 'calendar' && <div />}
+
+                  {/* List / Calendar toggle */}
+                  <div style={{ display:'flex', gap:4, marginLeft:'auto' }}>
+                    {['list','calendar'].map(v=>(
+                      <button key={v} onClick={()=>setReviewView(v)}
+                        style={{ padding:'5px 14px', borderRadius:6, cursor:'pointer', fontSize:12,
+                          border:`1px solid ${reviewView===v?BLUE:BORDER}`,
+                          background:reviewView===v?BLUE_BG:'#fff',
+                          color:reviewView===v?BLUE:MUTED, fontWeight:reviewView===v?600:400 }}>
+                        {v==='list'?'List':'Calendar'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Post cards */}
-                <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                {/* ── CALENDAR VIEW ── */}
+                {reviewView === 'calendar' && (() => {
+                  const postsByDate = {};
+                  (schedule||[]).forEach(slot => {
+                    if (!postsByDate[slot.date]) postsByDate[slot.date] = [];
+                    postsByDate[slot.date].push(slot);
+                  });
+                  return (
+                    <>
+                      {/* Nav + month/week toggle */}
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <button onClick={()=>setReviewCalFocus(f=>reviewCalMode==='month'?shiftMonth(f,-1):addDays(f,-7))}
+                            style={{ ...outlineBtn, padding:'4px 10px', fontSize:15 }}>‹</button>
+                          <span style={{ fontWeight:600, fontSize:14, minWidth:200, textAlign:'center' }}>
+                            {reviewCalMode==='month'?monthLabel(reviewCalFocus):weekLabel(reviewCalFocus)}
+                          </span>
+                          <button onClick={()=>setReviewCalFocus(f=>reviewCalMode==='month'?shiftMonth(f,1):addDays(f,7))}
+                            style={{ ...outlineBtn, padding:'4px 10px', fontSize:15 }}>›</button>
+                        </div>
+                        <div style={{ display:'flex', gap:4 }}>
+                          {['month','week'].map(m=>(
+                            <button key={m} onClick={()=>setReviewCalMode(m)}
+                              style={{ padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:12,
+                                border:`1px solid ${reviewCalMode===m?BLUE:BORDER}`,
+                                background:reviewCalMode===m?BLUE_BG:'#fff',
+                                color:reviewCalMode===m?BLUE:MUTED, fontWeight:reviewCalMode===m?600:400 }}>
+                              {m==='month'?'Month':'Week'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Month grid */}
+                      {reviewCalMode === 'month' && (
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+                          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>(
+                            <div key={d} style={{ textAlign:'center', fontSize:11, fontWeight:600, color:MUTED, padding:'4px 0 6px' }}>{d}</div>
+                          ))}
+                          {getMonthGrid(reviewCalFocus).map((dateStr,i)=>{
+                            if (!dateStr) return <div key={`e${i}`} style={{ minHeight:60 }} />;
+                            const daySlots = postsByDate[dateStr]||[];
+                            const isToday = dateStr===today();
+                            return (
+                              <div key={dateStr} style={{ minHeight:64, borderRadius:6, padding:'4px 6px',
+                                border:`1px solid ${isToday?BLUE:daySlots.length>0?BORDER:'#f3f4f6'}`,
+                                background:isToday?BLUE_BG:daySlots.length>0?'#fff':'#fafafa' }}>
+                                <div style={{ fontSize:11, fontWeight:isToday?700:400, color:isToday?BLUE:'#9ca3af', textAlign:'right' }}>
+                                  {new Date(dateStr+'T00:00:00').getDate()}
+                                </div>
+                                {daySlots.map(slot=>{
+                                  const p=posts[slot.id];
+                                  const hasPost=p&&!p.error;
+                                  const slotStatus=scheduleStatus[slot.id];
+                                  const isScheduled=slotStatus&&!slotStatus._loading&&Object.keys(slotStatus).length>0&&Object.values(slotStatus).every(v=>v?.ok);
+                                  const color=isScheduled?GREEN:hasPost?BLUE:MUTED;
+                                  return (
+                                    <div key={slot.id}
+                                      onClick={()=>{ setReviewView('list'); setHighlightedSlotId(slot.id); }}
+                                      style={{ marginTop:2, padding:'2px 5px', borderRadius:3, cursor:'pointer',
+                                        background:color+'18', border:`1px solid ${color}33` }}>
+                                      <div style={{ fontSize:9, fontWeight:700, color, lineHeight:1.3,
+                                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                        {slot.time ? formatTime(slot.time) : ''}{' '}
+                                        {isScheduled?'✓ Queued':hasPost?'Draft':'Pending'}
+                                      </div>
+                                      <div style={{ display:'flex', gap:2, marginTop:1, flexWrap:'wrap' }}>
+                                        {(slot.platforms||PLATFORMS_LIST).map(pl=>(
+                                          <span key={pl} style={{ width:5, height:5, borderRadius:'50%',
+                                            background:PLATFORM_COLORS[pl], display:'inline-block' }} />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Week grid */}
+                      {reviewCalMode === 'week' && (
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
+                          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>(
+                            <div key={d} style={{ textAlign:'center', fontSize:11, fontWeight:600, color:MUTED, padding:'4px 0 6px' }}>{d}</div>
+                          ))}
+                          {getWeekDates(reviewCalFocus).map(dateStr=>{
+                            const daySlots = postsByDate[dateStr]||[];
+                            const isToday = dateStr===today();
+                            const d = new Date(dateStr+'T00:00:00');
+                            return (
+                              <div key={dateStr} style={{ minHeight:110, borderRadius:8, padding:'6px 8px',
+                                border:`1px solid ${isToday?BLUE:BORDER}`,
+                                background:isToday?BLUE_BG:'#fafafa' }}>
+                                <div style={{ fontSize:11, fontWeight:600, color:isToday?BLUE:MUTED,
+                                  marginBottom:6, textAlign:'center' }}>
+                                  {d.toLocaleString('default',{month:'short'})} {d.getDate()}
+                                </div>
+                                {daySlots.flatMap(slot=>
+                                  (slot.platforms||PLATFORMS_LIST).map(platform=>({ slot, platform }))
+                                ).map(({slot,platform})=>{
+                                  const p=posts[slot.id];
+                                  const slotStatus=scheduleStatus[slot.id];
+                                  const isScheduled=slotStatus?.[platform]?.ok;
+                                  const color=PLATFORM_COLORS[platform];
+                                  return (
+                                    <div key={`${slot.id}-${platform}`}
+                                      onClick={()=>{ setReviewView('list'); setHighlightedSlotId(slot.id); }}
+                                      style={{ borderRadius:5, marginBottom:3, cursor:'pointer',
+                                        padding:'4px 7px', border:`1.5px solid ${color}`,
+                                        background:color+'12' }}>
+                                      <div style={{ fontSize:10, fontWeight:700, color,
+                                        textTransform:'uppercase', letterSpacing:'0.04em', lineHeight:1.2, marginBottom:1 }}>
+                                        {PLATFORM_LABELS[platform]}
+                                      </div>
+                                      <div style={{ fontSize:10, color:MUTED }}>{formatTime(slot.time)}</div>
+                                      <div style={{ fontSize:10, fontWeight:600,
+                                        color:isScheduled?GREEN:p&&!p.error?BLUE:MUTED }}>
+                                        {isScheduled?'✓ Queued':p&&!p.error?'Draft':'Pending'}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
+                {/* ── LIST VIEW ── */}
+                {reviewView === 'list' && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
                   {schedule.map(slot=>{
                     const p=posts[slot.id];
                     const field=activePlatform==='universal'?'post':POST_FIELD[activePlatform]||'post_linkedin';
@@ -1609,7 +1764,7 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
-                </div>
+                </div>}
               </>
             )}
           </>
