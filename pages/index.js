@@ -106,12 +106,13 @@ export default function Dashboard() {
     date: today(), time: '09:00', platforms: ['linkedin'], category: '', topicOverride: '', articleUrl: '',
   });
   const [recurForm, setRecurForm] = useState({
-    startDate: today(), endDate: addDays(today(), 27),
-    time: '11:00', days: [0,2,3],
+    startDate: today(), endDate: addDays(today(), 14),
+    time: '11:00', days: [0,1,2,3],
     platforms: ['linkedin','twitter','facebook','instagram'],
-    categories: Object.keys(CATEGORIES), // all selected by default
-    articleUrl: '',
+    topicKeyword: '',
   });
+  const [specificUrls, setSpecificUrls] = useState(['']);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   // ── Slot list filters ────────────────────────
   const [slotFilterFrom, setSlotFilterFrom] = useState('');
   const [slotFilterTo, setSlotFilterTo] = useState('');
@@ -258,8 +259,7 @@ export default function Dashboard() {
   const removeSlot = (id) => setCustomSlots(p => p.filter(s => s.id !== id));
 
   const addRecurring = () => {
-    const { startDate, endDate, time, days, platforms, categories, articleUrl } = recurForm;
-    const category = categories.length === Object.keys(CATEGORIES).length ? '' : categories[0] || '';
+    const { startDate, endDate, time, days, platforms, topicKeyword } = recurForm;
     if (!startDate || !endDate || !days.length || !platforms.length) return;
     const cur = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T00:00:00');
@@ -268,11 +268,36 @@ export default function Dashboard() {
     while (cur <= end && guard++ < 500) {
       const wd = cur.getDay() === 0 ? 6 : cur.getDay() - 1;
       if (days.includes(wd)) {
-        newSlots.push({ id: uid(), date: cur.toISOString().slice(0,10), time, platforms: [...platforms], categories: [...categories], category, topicOverride: '', articleUrl: articleUrl||'' });
+        newSlots.push({ id: uid(), date: cur.toISOString().slice(0,10), time, platforms: [...platforms], topicOverride: topicKeyword || '' });
       }
       cur.setDate(cur.getDate() + 1);
     }
     setCustomSlots(p => [...p, ...newSlots]);
+  };
+
+  const addSpecificSlots = () => {
+    const urls = specificUrls.filter(u => u.trim());
+    if (!urls.length) return;
+    const newSlots = [];
+    let cur = new Date(recurForm.startDate + 'T00:00:00');
+    const usedDates = new Set();
+    for (const url of urls) {
+      // Find next Mon–Thu not already used by this batch
+      let guard = 0;
+      while (guard++ < 60) {
+        const wd = cur.getDay(); // 0=Sun,1=Mon,...,6=Sat
+        const dateStr = cur.toISOString().slice(0, 10);
+        if (wd >= 1 && wd <= 4 && !usedDates.has(dateStr)) {
+          usedDates.add(dateStr);
+          newSlots.push({ id: uid(), date: dateStr, time: recurForm.time, platforms: [...recurForm.platforms], topicOverride: '', articleUrl: url });
+          cur.setDate(cur.getDate() + 1);
+          break;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    setCustomSlots(p => [...p, ...newSlots]);
+    setSpecificUrls(['']);
   };
 
   const toggleSlotPlatform = (setter, platforms, p) =>
@@ -312,8 +337,16 @@ export default function Dashboard() {
           displayTitle: slot.articleUrl.replace(/^https?:\/\/innago\.com\//, '').replace(/\/$/, '').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),
         };
       } else {
-        const pool = slot.categories && slot.categories.length > 0 && slot.categories.length < Object.keys(CATEGORIES).length
-          ? allArticles.filter(a => slot.categories.includes(a.category))
+        const pool = slot.topicOverride
+          ? (() => {
+              const kw = slot.topicOverride.toLowerCase();
+              const matched = allArticles.filter(a =>
+                a.url.toLowerCase().includes(kw) ||
+                (a.displayTitle || '').toLowerCase().includes(kw) ||
+                (a.category || '').toLowerCase().includes(kw)
+              );
+              return matched.length >= 3 ? [...matched, ...allArticles].slice(0, Math.max(matched.length * 2, 20)) : allArticles;
+            })()
           : slot.category && CATEGORIES[slot.category]
             ? allArticles.filter(a => a.category === slot.category)
             : allArticles;
@@ -873,29 +906,78 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* ── Article library status ── */}
-            <div>
-              <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px',
-                background:'#fff', border:`1px solid ${BORDER}`, borderRadius:10 }}>
-                <div style={{ flex:1 }}>
-                  <span style={{ fontSize:14, fontWeight:600, color:TEXT }}>Article Library</span>
-                  <span style={{ fontSize:13, color:MUTED, marginLeft:10 }}>
-                    {scrapedArticles.length > 0
-                      ? `${scrapedArticles.length} live articles (${scrapeSource}) + ${ALL_ARTICLES.length} seed articles`
-                      : `${ALL_ARTICLES.length} seed articles — click Refresh to pull live from innago.com`}
-                  </span>
-                </div>
-                <button onClick={refreshArticles} disabled={isRefreshing}
-                  style={{ ...outlineBtn, color:BLUE, borderColor:BLUE, opacity:isRefreshing?0.6:1, fontSize:13, padding:'6px 14px' }}>
-                  {isRefreshing ? 'Scraping…' : '↻ Refresh Articles'}
+            {/* ── Article Library (collapsible panel) ── */}
+            <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
+              {/* Header row */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px' }}>
+                <span style={{ fontSize:14, fontWeight:600, color:TEXT }}>Article Library</span>
+                <span style={{ fontSize:13, color:MUTED }}>
+                  {scrapedArticles.length > 0
+                    ? `${allArticles.length} articles (${scrapedArticles.length} live + ${ALL_ARTICLES.length - (allArticles.length - scrapedArticles.length)} seed)`
+                    : `${ALL_ARTICLES.length} seed articles`}
+                </span>
+                <button onClick={() => setLibraryOpen(o => !o)}
+                  style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:13, padding:'2px 6px', marginLeft:4 }}>
+                  {libraryOpen ? '▲' : '▼'}
                 </button>
-                {scrapedArticles.length > 0 && (
-                  <button onClick={()=>{setScrapedArticles([]);setScrapeSource('');}}
-                    style={{ ...outlineBtn, fontSize:13, padding:'6px 14px' }}>
-                    Clear Live
+                <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+                  {scrapedArticles.length > 0 && (
+                    <button onClick={()=>{setScrapedArticles([]);setScrapeSource('');}}
+                      style={{ ...outlineBtn, fontSize:12, padding:'5px 12px' }}>
+                      Clear Live
+                    </button>
+                  )}
+                  <button onClick={refreshArticles} disabled={isRefreshing}
+                    style={{ ...outlineBtn, color:BLUE, borderColor:BLUE, opacity:isRefreshing?0.6:1, fontSize:12, padding:'5px 12px' }}>
+                    {isRefreshing ? 'Scraping…' : '↻ Refresh Articles'}
                   </button>
-                )}
+                </div>
               </div>
+              {/* Expanded content */}
+              {libraryOpen && (
+                <div style={{ borderTop:`1px solid ${BORDER}`, padding:'12px 18px 16px' }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                    {Object.entries(CATEGORIES).map(([cat, urls]) => {
+                      const catArticles = allArticles.filter(a => a.category === cat);
+                      const displayArticles = catArticles.length > 0 ? catArticles : urls.map(url => {
+                        const slug = url.replace(/^https?:\/\/innago\.com\//, '').replace(/\/$/, '');
+                        return { url, category: cat, displayTitle: slug.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) };
+                      });
+                      const isOpen = openCategory === cat;
+                      return (
+                        <div key={cat} style={{ borderRadius:8, border:`1px solid ${BORDER}`, overflow:'hidden' }}>
+                          <button onClick={() => setOpenCategory(isOpen ? null : cat)}
+                            style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
+                              padding:'9px 14px', background:isOpen?BLUE_BG:'#fff', border:'none', cursor:'pointer',
+                              fontSize:13, fontWeight:isOpen?600:400, color:isOpen?BLUE:TEXT }}>
+                            <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              <span style={{ width:7, height:7, borderRadius:'50%', background:isOpen?BLUE:MUTED, display:'inline-block', flexShrink:0 }} />
+                              {cat}
+                            </span>
+                            <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              <span style={{ fontSize:11, color:isOpen?BLUE:MUTED, fontWeight:400 }}>{displayArticles.length} articles</span>
+                              <span style={{ fontSize:12, color:isOpen?BLUE:MUTED }}>{isOpen ? '▲' : '▼'}</span>
+                            </span>
+                          </button>
+                          {isOpen && (
+                            <div style={{ padding:'8px 14px 12px', background:BG,
+                              display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px 16px' }}>
+                              {displayArticles.map(a => (
+                                <a key={a.url} href={a.url} target="_blank" rel="noreferrer"
+                                  style={{ fontSize:12, color:BLUE, textDecoration:'none', lineHeight:1.5,
+                                    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
+                                  title={a.displayTitle}>
+                                  {a.displayTitle}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Quick Add Recurring ── */}
@@ -908,7 +990,9 @@ export default function Dashboard() {
                 {/* Date / time row */}
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:14 }}>
                   <Field label="Start date">
-                    <input type="date" value={recurForm.startDate} onChange={e=>setRecurForm(f=>({...f,startDate:e.target.value}))} style={input} />
+                    <input type="date" value={recurForm.startDate}
+                      onChange={e => setRecurForm(f => ({ ...f, startDate: e.target.value, endDate: addDays(e.target.value, 14) }))}
+                      style={input} />
                   </Field>
                   <Field label="End date">
                     <input type="date" value={recurForm.endDate} onChange={e=>setRecurForm(f=>({...f,endDate:e.target.value}))} style={input} />
@@ -918,85 +1002,38 @@ export default function Dashboard() {
                   </Field>
                 </div>
 
-                {/* Categories — full width */}
-                <Field label={`Content categories (${recurForm.categories.length}/${Object.keys(CATEGORIES).length} selected)`}>
-                  <div style={{ display:'flex', gap:6, marginBottom:8, marginTop:4 }}>
-                    <button onClick={()=>setRecurForm(f=>({...f,categories:Object.keys(CATEGORIES)}))}
-                      style={{ ...outlineBtn, fontSize:11, padding:'3px 10px' }}>Select all</button>
-                    <button onClick={()=>setRecurForm(f=>({...f,categories:[]}))}
-                      style={{ ...outlineBtn, fontSize:11, padding:'3px 10px' }}>Clear all</button>
+                <Field label="Focus topic (optional)">
+                  <input
+                    type="text"
+                    placeholder="e.g. taxes, finding tenants, lease signing…"
+                    value={recurForm.topicKeyword || ''}
+                    onChange={e => setRecurForm(f => ({ ...f, topicKeyword: e.target.value }))}
+                    style={input}
+                  />
+                  <div style={{ fontSize:12, color:MUTED, marginTop:6 }}>
+                    About half the posts will focus on articles matching this topic. Leave blank to pull from all categories.
                   </div>
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                    {Object.keys(CATEGORIES).map(cat => {
-                      const on = recurForm.categories.includes(cat);
+                </Field>
+
+                <Field label="Platforms">
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>
+                    {PLATFORMS_LIST.map(p => {
+                      const on = recurForm.platforms.includes(p);
                       return (
-                        <label key={cat} style={{ display:'flex', alignItems:'center', gap:5, cursor:'pointer',
-                          padding:'4px 10px', borderRadius:20, fontSize:12,
-                          border:`1.5px solid ${on?BLUE:BORDER}`,
-                          background:on?BLUE_BG:'#fff', color:on?BLUE:'#374151', fontWeight:on?600:400 }}>
+                        <label key={p} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer',
+                          padding:'5px 12px', borderRadius:20, fontSize:13,
+                          border:`1.5px solid ${on ? PLATFORM_COLORS[p] : BORDER}`,
+                          background: on ? PLATFORM_COLORS[p]+'18' : '#fff',
+                          color: on ? PLATFORM_COLORS[p] : '#374151', fontWeight: on ? 600 : 400 }}>
                           <input type="checkbox" checked={on}
-                            onChange={()=>setRecurForm(f=>({
-                              ...f,
-                              categories: on ? f.categories.filter(c=>c!==cat) : [...f.categories, cat],
-                              articleUrl: '',
-                            }))}
+                            onChange={()=>toggleSlotPlatform(setRecurForm, recurForm.platforms, p)}
                             style={{ display:'none' }} />
-                          {cat} <span style={{ fontSize:10, opacity:0.6 }}>({CATEGORIES[cat].length})</span>
+                          <span style={{ width:7, height:7, borderRadius:'50%', background:PLATFORM_COLORS[p], display:'inline-block', flexShrink:0 }} />
+                          {PLATFORM_LABELS[p]}
                         </label>
                       );
                     })}
                   </div>
-                </Field>
-
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginTop:14 }}>
-                  <Field label="Days of week">
-                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:4 }}>
-                      {DAY_NAMES.map((day,i) => {
-                        const on = recurForm.days.includes(i);
-                        return (
-                          <label key={i} style={{ display:'flex', alignItems:'center', cursor:'pointer',
-                            padding:'5px 12px', borderRadius:20, fontSize:13,
-                            border:`1.5px solid ${on?BLUE:BORDER}`,
-                            background:on?BLUE_BG:'#fff', color:on?BLUE:'#374151', fontWeight:on?600:400 }}>
-                            <input type="checkbox" checked={on}
-                              onChange={()=>setRecurForm(f=>({ ...f, days: on?f.days.filter(d=>d!==i):[...f.days,i] }))}
-                              style={{ display:'none' }} />
-                            {day}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </Field>
-
-                  <Field label="Platforms">
-                    <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>
-                      {PLATFORMS_LIST.map(p => {
-                        const on = recurForm.platforms.includes(p);
-                        return (
-                          <label key={p} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer',
-                            padding:'5px 12px', borderRadius:20, fontSize:13,
-                            border:`1.5px solid ${on ? PLATFORM_COLORS[p] : BORDER}`,
-                            background: on ? PLATFORM_COLORS[p]+'18' : '#fff',
-                            color: on ? PLATFORM_COLORS[p] : '#374151', fontWeight: on ? 600 : 400 }}>
-                            <input type="checkbox" checked={on}
-                              onChange={()=>toggleSlotPlatform(setRecurForm, recurForm.platforms, p)}
-                              style={{ display:'none' }} />
-                            <span style={{ width:7, height:7, borderRadius:'50%', background:PLATFORM_COLORS[p], display:'inline-block', flexShrink:0 }} />
-                            {PLATFORM_LABELS[p]}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </Field>
-                </div>
-
-                <Field label="Pin a specific article to all slots (optional)">
-                  <ArticlePicker
-                    value={recurForm.articleUrl}
-                    onChange={(url, article) => setRecurForm(f=>({ ...f, articleUrl: url, category: article?.category || f.category }))}
-                    slotDate={recurForm.startDate}
-                    articles={allArticles}
-                  />
                 </Field>
 
                 <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:12 }}>
@@ -1022,55 +1059,34 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* ── Article Library ── */}
+            {/* ── Add Specific Article Posts ── */}
             <div>
-              <Card title={`Article Library (${ALL_ARTICLES.length} articles across ${Object.keys(CATEGORIES).length} categories)`}>
-                <p style={{ margin:'0 0 12px', fontSize:13, color:MUTED }}>
-                  Click a category to browse its articles. Links open the article on innago.com.
+              <Card title="Add Specific Article Posts">
+                <p style={{ margin:'0 0 14px', fontSize:13, color:MUTED }}>
+                  Paste article URLs here — each one creates one post slot, scheduled on the next available weekday from your start date.
                 </p>
-                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                  {Object.entries(CATEGORIES).map(([cat, urls]) => {
-                    const isOpen = openCategory === cat;
-                    return (
-                      <div key={cat} style={{ borderRadius:8, border:`1px solid ${BORDER}`, overflow:'hidden' }}>
-                        {/* Category header */}
-                        <button onClick={()=>setOpenCategory(isOpen ? null : cat)}
-                          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
-                            padding:'9px 14px', background:isOpen?BLUE_BG:'#fff', border:'none', cursor:'pointer',
-                            fontSize:13, fontWeight:isOpen?600:400, color:isOpen?BLUE:TEXT }}>
-                          <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <span style={{ width:7, height:7, borderRadius:'50%', background:isOpen?BLUE:MUTED, display:'inline-block', flexShrink:0 }} />
-                            {cat}
-                          </span>
-                          <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <span style={{ fontSize:11, color:isOpen?BLUE:MUTED, fontWeight:400 }}>{urls.length} articles</span>
-                            <span style={{ fontSize:12, color:isOpen?BLUE:MUTED }}>{isOpen ? '▲' : '▼'}</span>
-                          </span>
-                        </button>
-                        {/* Article list */}
-                        {isOpen && (
-                          <div style={{ padding:'8px 14px 12px', background:BG,
-                            display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px 16px' }}>
-                            {urls.map(url => {
-                              const slug = url.replace(/^https?:\/\/innago\.com\//, '').replace(/\/$/, '');
-                              const title = slug.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-                              return (
-                                <a key={url} href={url} target="_blank" rel="noreferrer"
-                                  style={{ fontSize:12, color:BLUE, textDecoration:'none', lineHeight:1.5,
-                                    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
-                                  title={title}>
-                                  {title}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                {specificUrls.map((url, idx) => (
+                  <div key={idx} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
+                    <input
+                      type="url"
+                      placeholder="https://innago.com/your-article/"
+                      value={url}
+                      onChange={e => setSpecificUrls(u => u.map((v, i) => i === idx ? e.target.value : v))}
+                      style={{ ...input, flex:1 }}
+                    />
+                    {specificUrls.length > 1 && (
+                      <button onClick={() => setSpecificUrls(u => u.filter((_, i) => i !== idx))}
+                        style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:20 }}>×</button>
+                    )}
+                  </div>
+                ))}
+                <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                  <button onClick={() => setSpecificUrls(u => [...u, ''])} style={{ ...outlineBtn, background:'#f3f4f6', color:'#374151' }}>+ Add another article</button>
+                  <button onClick={addSpecificSlots} style={primaryBtn}>Add {specificUrls.filter(u => u.trim()).length} post{specificUrls.filter(u => u.trim()).length !== 1 ? 's' : ''} to schedule</button>
                 </div>
               </Card>
             </div>
+
           </div>
         )}
 
