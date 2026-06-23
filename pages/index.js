@@ -379,6 +379,7 @@ export default function Dashboard() {
               content_type: slot.article?.content_type || 'blog post',
               url: slot.article?.url,
               anthropicKey: anthropicKey || undefined,
+              templateIndex: i,
             }),
           });
           const imgData = await imgR.json();
@@ -510,6 +511,7 @@ export default function Dashboard() {
           url: slot.article?.url,
           anthropicKey: anthropicKey || undefined,
           bitlyKey: bitlyKey || undefined,
+          templateIndex: schedule ? schedule.findIndex(s => s.id === slot.id) : undefined,
         }),
       });
       const data = await r.json();

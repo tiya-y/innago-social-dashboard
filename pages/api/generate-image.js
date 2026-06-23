@@ -218,16 +218,32 @@ function getTemplateHint(title, summary, body) {
   return 'Use TEMPLATE 7 (default for general tips) or TEMPLATE 3 if any stat is present.';
 }
 
+const TEMPLATE_HINTS = {
+  1:  'Use TEMPLATE 1. Feature the most striking multiplier, ratio, or numeric stat from the article as the giant number.',
+  2:  'Use TEMPLATE 2. Find the most compelling quote or testimonial-style insight from the article.',
+  3:  'Use TEMPLATE 3. Feature the most striking percentage or fraction stat from the article.',
+  4:  'Use TEMPLATE 4. Frame the article around Innago\'s free value proposition.',
+  5:  'Use TEMPLATE 5. Feature the biggest dollar cost or financial risk figure from the article.',
+  6:  'Use TEMPLATE 6. Build a bar chart comparison using real data points from the article.',
+  7:  'Use TEMPLATE 7. Extract the 3 most actionable tips or steps from the article.',
+  8:  'Use TEMPLATE 8. Feature the market size, industry stat, or year-labeled growth figure.',
+  9:  'Use TEMPLATE 9. Spotlight the key Innago feature or tool discussed in the article.',
+  10: 'Use TEMPLATE 10. Build a CTA card around the main action the article recommends.',
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { title, summary = '', content_type = 'blog post', url = '', anthropicKey } = req.body;
+  const { title, summary = '', content_type = 'blog post', url = '', anthropicKey, templateIndex } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
   // Fetch article body so Claude can read real content
   const articleBody = await fetchArticleBody(url);
 
-  const templateHint = getTemplateHint(title, summary, articleBody);
+  // Cycle through all 10 templates if an index is provided; otherwise fall back to content-based selection
+  const templateHint = (typeof templateIndex === 'number')
+    ? TEMPLATE_HINTS[(templateIndex % 10) + 1]
+    : getTemplateHint(title, summary, articleBody);
 
   const userPrompt = `Article title: ${title}
 Content type: ${content_type}
