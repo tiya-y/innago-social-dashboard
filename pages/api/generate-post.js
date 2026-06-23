@@ -54,7 +54,7 @@ PLATFORM-SPECIFIC RULES:
   twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
   linkedin:  1-3 sentences before the URL. Professional authority voice. B2B landlord audience. Can include more context than other platforms.
   facebook:  1-2 sentences before the URL. Conversational and warm. Community feel. Slightly less formal than LinkedIn.
-  instagram: 1-2 sentences. Visual-first hook — the opening words must grab immediately. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Link in bio." on its own line. Instagram does not support clickable links in captions.
+  instagram: 1-2 sentences. Visual-first hook — the opening words must grab immediately. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Read more at innago.com/blog" on its own line. Instagram does not support clickable links in captions.
 
 Each platform's post must be genuinely different — different hook, different angle, different length. Not the same sentence reworded.
 
@@ -301,8 +301,8 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
   // Strip any URL that Claude may have included anyway
   instagramCaption = instagramCaption.replace(/https?:\/\/\S+/g, '').trim();
   // Ensure it ends with "Link in bio."
-  if (!instagramCaption.toLowerCase().includes('link in bio')) {
-    instagramCaption = instagramCaption + '\n\nLink in bio.';
+  if (!instagramCaption.toLowerCase().includes('innago.com/blog')) {
+    instagramCaption = instagramCaption + '\n\nRead more at innago.com/blog';
   }
   const post_instagram = instagramCaption;
 
