@@ -364,6 +364,30 @@ export default function Dashboard() {
         setProgress({ done: i + 1, total: newPlan.length });
         continue;
       }
+      // Auto-generate image for Instagram slots
+      const needsImage = postData && !postData.error &&
+        (!slot.platforms || slot.platforms.includes('instagram'));
+      if (needsImage) {
+        setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: '', loading: true } }));
+        try {
+          const imgR = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: postData.title || slot.article?.displayTitle,
+              summary: slot.article?.summary || '',
+              content_type: slot.article?.content_type || 'blog post',
+              url: slot.article?.url,
+              anthropicKey: anthropicKey || undefined,
+            }),
+          });
+          const imgData = await imgR.json();
+          setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: imgData.html || '', loading: false, template: imgData.template } }));
+        } catch {
+          setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: '', loading: false, error: true } }));
+        }
+      }
+
       if (autoSchedule && hasValidMapping() && postData && !postData.error) {
         const statusRes = await scheduleSlot(slot.id, postData, mergedSchedule);
         setScheduleStatus(p => ({ ...p, [slot.id]: statusRes }));
@@ -1103,7 +1127,7 @@ export default function Dashboard() {
               ) : (
                 <div style={{ marginTop:10, padding:'8px 12px', background:'#fef9ec',
                   border:'1px solid #fde68a', borderRadius:8, fontSize:13, color:YELLOW }}>
-                  ⚠ No key entered — links will use full UTM-tagged URLs
+                  ⚠ No Bitly key — links will be shortened via TinyURL (free fallback, no analytics)
                 </div>
               )}
             </Card>
