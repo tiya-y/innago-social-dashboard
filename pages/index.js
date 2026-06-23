@@ -1036,15 +1036,38 @@ export default function Dashboard() {
                   </div>
                 </Field>
 
+                {/* ── Specific articles ── */}
+                <Field label="Include specific articles (optional)">
+                  <p style={{ margin:'0 0 10px', fontSize:12, color:MUTED }}>
+                    Each URL becomes one dedicated post slot in this batch, scheduled on the next available date.
+                  </p>
+                  {specificUrls.map((url, idx) => (
+                    <div key={idx} style={{ display:'flex', gap:8, marginBottom:6, alignItems:'center' }}>
+                      <input
+                        type="url"
+                        placeholder="https://innago.com/your-article/"
+                        value={url}
+                        onChange={e => setSpecificUrls(u => u.map((v, i) => i === idx ? e.target.value : v))}
+                        style={{ ...input, flex:1 }}
+                      />
+                      {specificUrls.length > 1 && (
+                        <button onClick={() => setSpecificUrls(u => u.filter((_, i) => i !== idx))}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:20, lineHeight:1 }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => setSpecificUrls(u => [...u, ''])}
+                    style={{ ...outlineBtn, fontSize:12, padding:'4px 12px', marginTop:2 }}>+ Add another URL</button>
+                </Field>
+
                 <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:12 }}>
-                  <button onClick={addRecurring}
+                  <button onClick={()=>{ addRecurring(); if (specificUrls.some(u=>u.trim())) addSpecificSlots(); }}
                     disabled={!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length}
                     style={{ ...primaryBtn,
                       opacity:(!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length)?0.5:1 }}>
-                    Add Recurring Slots
+                    Add to Schedule
                   </button>
                   {recurForm.startDate && recurForm.endDate && recurForm.days.length > 0 && (() => {
-                    // Count how many slots this will add
                     const cur = new Date(recurForm.startDate+'T00:00:00');
                     const end = new Date(recurForm.endDate+'T00:00:00');
                     let count = 0, guard = 0;
@@ -1053,36 +1076,10 @@ export default function Dashboard() {
                       if (recurForm.days.includes(wd)) count++;
                       cur.setDate(cur.getDate()+1);
                     }
-                    return count > 0 ? <span style={{ fontSize:13, color:MUTED }}>Will add {count} slot{count!==1?'s':''}</span> : null;
+                    const specific = specificUrls.filter(u=>u.trim()).length;
+                    const total = count + specific;
+                    return total > 0 ? <span style={{ fontSize:13, color:MUTED }}>{count} recurring{specific > 0 ? ` + ${specific} specific` : ''} = {total} slot{total!==1?'s':''}</span> : null;
                   })()}
-                </div>
-              </Card>
-            </div>
-
-            {/* ── Add Specific Article Posts ── */}
-            <div>
-              <Card title="Add Specific Article Posts">
-                <p style={{ margin:'0 0 14px', fontSize:13, color:MUTED }}>
-                  Paste article URLs here — each one creates one post slot, scheduled on the next available weekday from your start date.
-                </p>
-                {specificUrls.map((url, idx) => (
-                  <div key={idx} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
-                    <input
-                      type="url"
-                      placeholder="https://innago.com/your-article/"
-                      value={url}
-                      onChange={e => setSpecificUrls(u => u.map((v, i) => i === idx ? e.target.value : v))}
-                      style={{ ...input, flex:1 }}
-                    />
-                    {specificUrls.length > 1 && (
-                      <button onClick={() => setSpecificUrls(u => u.filter((_, i) => i !== idx))}
-                        style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:20 }}>×</button>
-                    )}
-                  </div>
-                ))}
-                <div style={{ display:'flex', gap:8, marginTop:4 }}>
-                  <button onClick={() => setSpecificUrls(u => [...u, ''])} style={{ ...outlineBtn, background:'#f3f4f6', color:'#374151' }}>+ Add another article</button>
-                  <button onClick={addSpecificSlots} style={primaryBtn}>Add {specificUrls.filter(u => u.trim()).length} post{specificUrls.filter(u => u.trim()).length !== 1 ? 's' : ''} to schedule</button>
                 </div>
               </Card>
             </div>
