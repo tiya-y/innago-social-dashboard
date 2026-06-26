@@ -55,7 +55,7 @@ DO NOT copy the social caption text. DO NOT restate the title verbatim.
 The graphic must surface something concrete from inside the article — a number, a dollar figure, a percentage, a named tip, a quoted line, a data point.
 
 ━━━━━━━━━━━  SIMPLICITY — HARD RULES  ━━━━━━━━━━━
-1. ONE HOOK ONLY. The graphic has exactly one main message: a single stat, number, or 5–10 word headline. Do not add supporting cards, secondary stat boxes, comparison grids, quote boxes, or bullet lists alongside it. One idea. Full stop.
+1. ONE MAIN MESSAGE. The graphic communicates exactly one idea: a single stat, number, or 5–10 word headline. You may add a short eyebrow label and one brief descriptor line to support it (see rule 3), but do NOT add secondary stat cards, comparison grids, quote boxes, bullet lists, or any other competing content block.
 2. DO NOT use Template 2 (Testimonial) or Template 6 (Data Comparison). These require real review quotes and real comparative data that is rarely available. Never fabricate quotes or invent data points. Use Templates 1, 3, 4, 5, 7, 8, 9, or 10 only.
 3. Keep it clean. No more than 3 distinct text elements total on the canvas (e.g. eyebrow label + main stat + one-line descriptor). Every additional element makes the graphic harder to read at a glance on a phone screen.
 
