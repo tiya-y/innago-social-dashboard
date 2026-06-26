@@ -358,6 +358,10 @@ export default function Dashboard() {
 
   const handleGenerate = async () => {
     if (!newCustomSlots.length) return;
+    if (!anthropicKey) {
+      alert('Anthropic API key is missing. Go to the Settings tab and enter your key.');
+      return;
+    }
     setGenerating(true);
     abortRef.current = false;
     setTab('review');
@@ -436,9 +440,14 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
         });
         postData = await r.json();
+        if (postData?.error) {
+          setPosts(p => ({ ...p, [slot.id]: { error: postData.error, detail: postData.detail } }));
+          setProgress({ done: i + 1, total: newPlan.length });
+          continue;
+        }
         setPosts(p => ({ ...p, [slot.id]: postData }));
         // Extract Twitter hook for variety tracking
         if (postData?.post_twitter_x) {
@@ -449,8 +458,8 @@ export default function Dashboard() {
             return next;
           });
         }
-      } catch {
-        setPosts(p => ({ ...p, [slot.id]: { error: 'Generation failed' } }));
+      } catch (err) {
+        setPosts(p => ({ ...p, [slot.id]: { error: 'Network error', detail: err?.message || '' } }));
         setProgress({ done: i + 1, total: newPlan.length });
         continue;
       }
@@ -487,6 +496,8 @@ export default function Dashboard() {
     }
     setGenerating(false);
   };
+  // ensure generating always resets on unexpected throw
+  const handleGenerateSafe = () => handleGenerate().catch(() => setGenerating(false));
 
   function hasValidMapping() {
     return Object.values(accountMapping).some((m) => m.accountId);
@@ -1291,7 +1302,7 @@ export default function Dashboard() {
                     Add to Schedule
                   </button>
                   {!generating ? (
-                    <button onClick={handleGenerate}
+                    <button onClick={handleGenerateSafe}
                       disabled={newCustomSlots.length === 0}
                       style={{ ...primaryBtn, background: newCustomSlots.length === 0 ? MUTED : GREEN,
                         opacity: newCustomSlots.length === 0 ? 0.5 : 1 }}>
@@ -1947,7 +1958,7 @@ export default function Dashboard() {
                         {platformIncluded && !isLoading && !p && <div style={{ color:'#d1d5db', fontSize:14 }}>Pending</div>}
                         {platformIncluded && p?.error && (
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                            <span style={{ color:RED, fontSize:14 }}>{p.error}</span>
+                            <span style={{ color:RED, fontSize:14 }}>{p.error}{p.detail ? ` — ${p.detail.slice(0,120)}` : ''}</span>
                             <button onClick={()=>regenerateSingle(slot)}
                               style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:RED, borderColor:RED }}>
                               Retry
