@@ -54,6 +54,11 @@ READ THE ARTICLE BODY. Extract the most compelling stat, quote, fact, or insight
 DO NOT copy the social caption text. DO NOT restate the title verbatim.
 The graphic must surface something concrete from inside the article — a number, a dollar figure, a percentage, a named tip, a quoted line, a data point.
 
+━━━━━━━━━━━  SIMPLICITY — HARD RULES  ━━━━━━━━━━━
+1. ONE HOOK ONLY. The graphic has exactly one main message: a single stat, number, or 5–10 word headline. Do not add supporting cards, secondary stat boxes, comparison grids, quote boxes, or bullet lists alongside it. One idea. Full stop.
+2. DO NOT use Template 2 (Testimonial) or Template 6 (Data Comparison). These require real review quotes and real comparative data that is rarely available. Never fabricate quotes or invent data points. Use Templates 1, 3, 4, 5, 7, 8, 9, or 10 only.
+3. Keep it clean. No more than 3 distinct text elements total on the canvas (e.g. eyebrow label + main stat + one-line descriptor). Every additional element makes the graphic harder to read at a glance on a phone screen.
+
 ━━━━━━━━━━━  TEXT OVERFLOW — HARD RULES  ━━━━━━━━━━━
 1. MAXIMUM 15 WORDS total across ALL text elements on the graphic (logo and source lines excluded). Count every word. If you exceed 15, cut.
 2. Every text element MUST fit inside its container without overflow. Before finalising each element, verify:
