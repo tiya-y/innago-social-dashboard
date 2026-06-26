@@ -54,6 +54,15 @@ READ THE ARTICLE BODY. Extract the most compelling stat, quote, fact, or insight
 DO NOT copy the social caption text. DO NOT restate the title verbatim.
 The graphic must surface something concrete from inside the article — a number, a dollar figure, a percentage, a named tip, a quoted line, a data point.
 
+━━━━━━━━━━━  TEXT OVERFLOW — HARD RULES  ━━━━━━━━━━━
+1. MAXIMUM 15 WORDS total across ALL text elements on the graphic (logo and source lines excluded). Count every word. If you exceed 15, cut.
+2. Every text element MUST fit inside its container without overflow. Before finalising each element, verify:
+   - The font-size × character count × line-height fits within the element's explicit width and height.
+   - If it does not fit, do ONE of: (a) reduce font-size, (b) shorten the text, or (c) increase the container's width/height — never allow overflow:visible on a text container.
+3. Headline / stat lines: keep to 1–6 words. Body/descriptor lines: keep to 1–9 words. Never write a full sentence where a phrase will do.
+4. Set overflow:hidden on every div that contains text. Never rely on the browser to wrap text outside its box.
+5. For any text inside a fixed-width pill, badge, or bar label: use white-space:nowrap and ensure the pill width is wide enough, or shorten the text until it fits on one line.
+
 ━━━━━━━━━━━  BRAND TOKENS  ━━━━━━━━━━━
 Primary:   #2675FF blue  |  #2E3B47 dark navy  |  #ffffff white
 Accents:   #8A47DF purple  |  #44D7B6 teal/mint  |  #DDF247 lime  |  #F6B42A amber  |  #FF6D5A coral
