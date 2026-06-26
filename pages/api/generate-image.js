@@ -234,7 +234,7 @@ const TEMPLATE_HINTS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { title, summary = '', content_type = 'blog post', url = '', anthropicKey, templateIndex } = req.body;
+  const { title, summary = '', content_type = 'blog post', url = '', anthropicKey, templateIndex, feedback, feedbackHistory } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
   // Fetch article body so Claude can read real content
@@ -245,6 +245,15 @@ export default async function handler(req, res) {
     ? TEMPLATE_HINTS[(templateIndex % 10) + 1]
     : getTemplateHint(title, summary, articleBody);
 
+  const feedbackSection = [
+    feedbackHistory?.length > 0
+      ? `Past feedback on image regenerations (mistakes to avoid):\n${feedbackHistory.slice(-10).map(f => `- ${f.feedback}`).join('\n')}`
+      : '',
+    feedback
+      ? `Specific feedback for THIS regeneration: ${feedback}`
+      : '',
+  ].filter(Boolean).join('\n\n');
+
   const userPrompt = `Article title: ${title}
 Content type: ${content_type}
 Summary: ${summary.slice(0, 400)}
@@ -253,7 +262,7 @@ Article body (read this to extract real stats, quotes, and tips):
 ${articleBody || '(article body not available — use title and summary)'}
 
 ${templateHint}
-
+${feedbackSection ? `\n${feedbackSection}\n` : ''}
 The logo src must be exactly: INNAGO_LOGO
 Render it as: <img src="INNAGO_LOGO" style="height:36px;display:block;" alt="innago">
 

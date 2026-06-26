@@ -230,7 +230,7 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { url, displayTitle, date, boostedTopic, anthropicKey, bitlyKey } = req.body;
+  const { url, displayTitle, date, boostedTopic, anthropicKey, bitlyKey, recentTwitterHooks } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   // Fetch article metadata
@@ -238,6 +238,13 @@ export default async function handler(req, res) {
   const title = meta?.title || displayTitle || url;
   const summary = meta?.summary || '';
   const image_url = meta?.image_url || '';
+
+  const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+  const recentHooks = (recentTwitterHooks || [])
+    .filter(h => new Date(h.date) >= twoWeeksAgo)
+    .map(h => h.hook);
+
+  const twitterHookRule = `\nTWITTER HOOK VARIETY RULE: Do NOT start the Twitter post with any of these openings used in the past 14 days:\n${recentHooks.length > 0 ? recentHooks.map(h => `- "${h}"`).join('\n') : '(none yet)'}\nNever start more than 1 post per 14-day period with "most landlords". Vary the hook pattern every post.`;
 
   const userPrompt = `Generate 4 platform-specific social media posts for this Innago article:
 
@@ -249,7 +256,7 @@ Include the URL exactly (${url}) at the end of twitter, linkedin, and facebook p
 Instagram caption must NOT include the URL — end with "Link in bio." instead.
 Only reference data or stats from 2025 or 2026. Ignore older figures.
 Do not write about password resets, account creation, or login pages.${boostedTopic ? `\n\nThis is part of a focused push on "${boostedTopic}" — frame each post accordingly.` : ''}
-
+${twitterHookRule}
 Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform's post differently.`;
 
   const client = new Anthropic({ apiKey: anthropicKey || process.env.ANTHROPIC_API_KEY });

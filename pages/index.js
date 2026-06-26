@@ -159,6 +159,14 @@ export default function Dashboard() {
       if (postsStr) { try { setPosts(JSON.parse(postsStr));             } catch {} }
       if (statStr)  { try { setScheduleStatus(JSON.parse(statStr));     } catch {} }
       if (acctMap)  { try { setAccountMapping(JSON.parse(acctMap));     } catch {} }
+      const customArts = localStorage.getItem('innago-custom-articles');
+      if (customArts) { try { setCustomArticles(JSON.parse(customArts)); } catch {} }
+      const approvedStr = localStorage.getItem('innago-approved-posts');
+      if (approvedStr) { try { setApprovedPosts(JSON.parse(approvedStr)); } catch {} }
+      const imgFbStr = localStorage.getItem('innago-image-feedback');
+      if (imgFbStr) { try { setImageFeedbackHistory(JSON.parse(imgFbStr)); } catch {} }
+      const hooksStr = localStorage.getItem('innago-twitter-hooks');
+      if (hooksStr) { try { setTwitterHooks(JSON.parse(hooksStr)); } catch {} }
     } catch {}
   }, []);
 
@@ -182,12 +190,29 @@ export default function Dashboard() {
   const [scheduleStatus, setScheduleStatus] = useState({});
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [activePlatform, setActivePlatform] = useState('linkedin');
+  const [activePlatform, setActivePlatform] = useState('universal');
+  const [approvedPosts, setApprovedPosts] = useState({});
   const [editingKey, setEditingKey] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [copiedKey, setCopiedKey] = useState(null);
   const [regeneratingId, setRegeneratingId] = useState(null);
   const abortRef = useRef(false);
+
+  // ── Custom articles (manually added to library) ──────────────
+  const [newArticleUrl, setNewArticleUrl] = useState('');
+  const [newArticleCategory, setNewArticleCategory] = useState(Object.keys(CATEGORIES)[0]);
+  const [customArticles, setCustomArticles] = useState([]);
+
+  // ── Approved posts ───────────────────────────────────────────
+  // (state declared above alongside activePlatform)
+
+  // ── Image feedback loop ──────────────────────────────────────
+  const [imgFeedbackSlotId, setImgFeedbackSlotId] = useState(null);
+  const [imgFeedbackText, setImgFeedbackText] = useState('');
+  const [imageFeedbackHistory, setImageFeedbackHistory] = useState([]);
+
+  // ── Twitter hook variety tracking ───────────────────────────
+  const [twitterHooks, setTwitterHooks] = useState([]);
 
   // ── Derived ──────────────────────────────────
   const doneCount = Object.keys(posts).length;
@@ -242,12 +267,28 @@ export default function Dashboard() {
     }
   };
 
-  // Merged article list: scraped articles first, then static seed list deduped
+  // Merged article list: scraped articles first, then custom, then static seed list deduped
   const allArticles = (() => {
     const seen = new Set(scrapedArticles.map(a => a.url));
     const staticFallback = ALL_ARTICLES.filter(a => !seen.has(a.url));
-    return [...scrapedArticles, ...staticFallback];
+    const customFiltered = customArticles.filter(a => !seen.has(a.url) && !ALL_ARTICLES.some(s => s.url === a.url));
+    return [...scrapedArticles, ...customFiltered, ...staticFallback];
   })();
+
+  // ── Add custom article to library ────────────
+  const addCustomArticle = () => {
+    const url = newArticleUrl.trim();
+    if (!url) return;
+    const slug = url.replace(/^https?:\/\/[^/]+\//, '').replace(/\/$/, '');
+    const displayTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const article = { url, displayTitle, category: newArticleCategory, slug, custom: true };
+    setCustomArticles(prev => {
+      const next = [...prev.filter(a => a.url !== url), article];
+      try { localStorage.setItem('innago-custom-articles', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setNewArticleUrl('');
+  };
 
   // ── Slot management ──────────────────────────
   const addSlot = () => {
@@ -388,10 +429,19 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
         });
         postData = await r.json();
         setPosts(p => ({ ...p, [slot.id]: postData }));
+        // Extract Twitter hook for variety tracking
+        if (postData?.post_twitter_x) {
+          const hook = postData.post_twitter_x.trim().split(/\s+/).slice(0, 5).join(' ').toLowerCase();
+          setTwitterHooks(prev => {
+            const next = [...prev, { hook, date: slot.date }];
+            try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
       } catch {
         setPosts(p => ({ ...p, [slot.id]: { error: 'Generation failed' } }));
         setProgress({ done: i + 1, total: newPlan.length });
@@ -518,13 +568,40 @@ export default function Dashboard() {
       const r = await fetch('/api/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined }),
+        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
       });
       const postData = await r.json();
       setPosts(p => ({ ...p, [slot.id]: postData }));
       setScheduleStatus(p => ({ ...p, [slot.id]: undefined }));
+      if (postData?.post_twitter_x) {
+        const hook = postData.post_twitter_x.trim().split(/\s+/).slice(0, 5).join(' ').toLowerCase();
+        setTwitterHooks(prev => {
+          const next = [...prev, { hook, date: slot.date }];
+          try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
     } catch { /* keep existing */ } finally {
       setRegeneratingId(null);
+    }
+  };
+
+  // ── Approve post ─────────────────────────────
+  const approvePost = (slotId, platforms) => {
+    const slot = schedule?.find(s => s.id === slotId);
+    const articleUrl = slot?.article?.url;
+    setApprovedPosts(prev => {
+      const next = { ...prev, [slotId]: { platforms, approvedAt: new Date().toISOString() } };
+      try { localStorage.setItem('innago-approved-posts', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    // Mark article as used when approved
+    if (articleUrl) {
+      try {
+        const used = new Set(JSON.parse(localStorage.getItem('innago-used-articles') || '[]'));
+        used.add(articleUrl);
+        localStorage.setItem('innago-used-articles', JSON.stringify([...used]));
+      } catch {}
     }
   };
 
@@ -545,6 +622,34 @@ export default function Dashboard() {
           anthropicKey: anthropicKey || undefined,
           bitlyKey: bitlyKey || undefined,
           templateIndex: schedule ? schedule.findIndex(s => s.id === slot.id) : undefined,
+        }),
+      });
+      const data = await r.json();
+      setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: data.html || '', loading: false, template: data.template } }));
+    } catch {
+      setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: '', loading: false, error: true } }));
+    }
+  };
+
+  // ── AI Image generation with feedback ────────
+  const generateImageWithFeedback = async (slot, feedback) => {
+    const p = posts[slot.id];
+    if (!p) return;
+    setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: '', loading: true } }));
+    try {
+      const r = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: p.title || slot.article?.displayTitle,
+          summary: slot.article?.summary || '',
+          content_type: slot.article?.content_type || 'blog post',
+          url: slot.article?.url,
+          anthropicKey: anthropicKey || undefined,
+          bitlyKey: bitlyKey || undefined,
+          templateIndex: schedule ? schedule.findIndex(s => s.id === slot.id) : undefined,
+          feedback: feedback || undefined,
+          feedbackHistory: imageFeedbackHistory.length > 0 ? imageFeedbackHistory : undefined,
         }),
       });
       const data = await r.json();
@@ -604,6 +709,22 @@ export default function Dashboard() {
   useEffect(() => {
     try { localStorage.setItem('innago-account-mapping', JSON.stringify(accountMapping)); } catch {}
   }, [accountMapping]);
+
+  useEffect(() => {
+    try { localStorage.setItem('innago-custom-articles', JSON.stringify(customArticles)); } catch {}
+  }, [customArticles]);
+
+  useEffect(() => {
+    try { localStorage.setItem('innago-approved-posts', JSON.stringify(approvedPosts)); } catch {}
+  }, [approvedPosts]);
+
+  useEffect(() => {
+    try { localStorage.setItem('innago-image-feedback', JSON.stringify(imageFeedbackHistory)); } catch {}
+  }, [imageFeedbackHistory]);
+
+  useEffect(() => {
+    try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(twitterHooks)); } catch {}
+  }, [twitterHooks]);
 
   // ── Calendar label — uses article category from generated schedule if available ──
   const calendarLabel = (slot) => {
@@ -936,6 +1057,31 @@ export default function Dashboard() {
               {/* Expanded content */}
               {libraryOpen && (
                 <div style={{ borderTop:`1px solid ${BORDER}`, padding:'12px 18px 16px' }}>
+                  {/* Add article form */}
+                  <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:14, padding:'10px 14px',
+                    background:BLUE_BG, borderRadius:8, border:`1px solid ${BORDER}` }}>
+                    <input
+                      type="url"
+                      placeholder="https://innago.com/your-article/"
+                      value={newArticleUrl}
+                      onChange={e => setNewArticleUrl(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addCustomArticle()}
+                      style={{ ...input, flex:1, fontSize:13, padding:'7px 10px' }}
+                    />
+                    <select
+                      value={newArticleCategory}
+                      onChange={e => setNewArticleCategory(e.target.value)}
+                      style={{ ...input, width:'auto', fontSize:13, padding:'7px 10px', flexShrink:0 }}
+                    >
+                      {Object.keys(CATEGORIES).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <button onClick={addCustomArticle}
+                      style={{ ...primaryBtn, fontSize:13, padding:'7px 18px', flexShrink:0 }}>
+                      Add
+                    </button>
+                  </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                     {Object.entries(CATEGORIES).map(([cat, urls]) => {
                       const catArticles = allArticles.filter(a => a.category === cat);
@@ -976,13 +1122,46 @@ export default function Dashboard() {
                       );
                     })}
                   </div>
+                  {/* Custom articles section */}
+                  {customArticles.length > 0 && (
+                    <div style={{ marginTop:12 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:MUTED, textTransform:'uppercase',
+                        letterSpacing:'0.05em', marginBottom:8 }}>Custom Articles ({customArticles.length})</div>
+                      {(() => {
+                        const grouped = {};
+                        customArticles.forEach(a => {
+                          if (!grouped[a.category]) grouped[a.category] = [];
+                          grouped[a.category].push(a);
+                        });
+                        return Object.entries(grouped).map(([cat, arts]) => (
+                          <div key={cat} style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:11, fontWeight:600, color:MUTED, marginBottom:4 }}>{cat}</div>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px 16px' }}>
+                              {arts.map(a => (
+                                <div key={a.url} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                  <a href={a.url} target="_blank" rel="noreferrer"
+                                    style={{ fontSize:12, color:BLUE, textDecoration:'none', lineHeight:1.5,
+                                      flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                                    title={a.displayTitle}>
+                                    {a.displayTitle}
+                                  </a>
+                                  <button onClick={() => setCustomArticles(prev => prev.filter(x => x.url !== a.url))}
+                                    style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:14, padding:0, lineHeight:1, flexShrink:0 }}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
             {/* ── Quick Add Recurring ── */}
             <div>
-              <Card title="Quick Add Recurring Slots">
+              <Card title="Schedule Posts">
                 <p style={{ margin:'0 0 16px', fontSize:13, color:MUTED }}>
                   Add many slots at once across a date range — pick the days, time, platforms, and category.
                 </p>
@@ -1327,8 +1506,15 @@ export default function Dashboard() {
                     <Stat label="Posts generated" value={doneCount} />
                     <Stat label="Scheduled to Blotato" value={scheduledCount} color={scheduledCount>0?GREEN:MUTED} />
                     <Stat label="Date range" value={`${schedule[0]?.date} – ${schedule[schedule.length-1]?.date}`} />
+                    {doneCount > 0 && (
+                      <button onClick={() => schedule?.forEach(slot => {
+                        if (posts[slot.id] && !posts[slot.id].error) approvePost(slot.id, slot.platforms || PLATFORMS_LIST);
+                      })} style={{ ...outlineBtn, color: GREEN, borderColor: GREEN, marginLeft: 'auto', fontSize: 13 }}>
+                        ✓ Approve All
+                      </button>
+                    )}
                     {!blotatoReady && doneCount>0 && (
-                      <div style={{ marginLeft:'auto', display:'flex', alignItems:'center' }}>
+                      <div style={{ display:'flex', alignItems:'center' }}>
                         <button onClick={()=>setTab('blotato')} style={{ ...outlineBtn, color:BLUE, borderColor:BLUE }}>
                           Set up Blotato →
                         </button>
@@ -1544,11 +1730,13 @@ export default function Dashboard() {
                       );
                     const showAiImage = hasAiImage && activePlatform !== 'twitter';
 
+                    const slotApproved = approvedPosts[slot.id];
+                    const allPlatformsApproved = slotApproved && (slot.platforms || PLATFORMS_LIST).every(pl => (slotApproved.platforms || []).includes(pl));
+
                     return (
-                      <div key={slot.id} style={{
-                        id:`slot-card-${slot.id}`,
+                      <div key={slot.id} id={`slot-card-${slot.id}`} style={{
                         background:'#fff', border:`1px solid ${overLimit?RED:BORDER}`, borderRadius:10, padding:'16px 20px',
-                        borderLeft:`4px solid ${slot.boostedTopic?BLUE:overLimit?RED:BORDER}`,
+                        borderLeft:`4px solid ${allPlatformsApproved?GREEN:slot.boostedTopic?BLUE:overLimit?RED:BORDER}`,
                         opacity: !platformIncluded ? 0.55 : 1,
                       }}>
                         {/* Header row */}
@@ -1581,6 +1769,12 @@ export default function Dashboard() {
                                 style={{ fontSize:12, color:BLUE, textDecoration:'none' }}>
                                 {p?.title || slot.article?.displayTitle}
                               </a>
+                              {allPlatformsApproved && (
+                                <span style={{ fontSize:11, background:'#f0fdf4', color:GREEN,
+                                  padding:'2px 8px', borderRadius:10, fontWeight:600 }}>
+                                  ✓ All approved
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1597,7 +1791,7 @@ export default function Dashboard() {
 
 
                             {p && !p.error && !isLoading && (
-                              <button onClick={()=>generateImage(slot)}
+                              <button onClick={()=> hasAiImage ? setImgFeedbackSlotId(slot.id) : generateImage(slot)}
                                 disabled={!!imgEntry?.loading}
                                 title="Generate AI branded image"
                                 style={{ ...outlineBtn, fontSize:12, padding:'5px 10px',
@@ -1631,10 +1825,52 @@ export default function Dashboard() {
                                     ...(isEditing?{color:BLUE,borderColor:BLUE}:{}) }}>
                                   {isEditing?'Save':'Edit'}
                                 </button>
+                                {activePlatform !== 'universal' && (() => {
+                                  const plApproved = slotApproved?.platforms?.includes(activePlatform);
+                                  return plApproved ? (
+                                    <span style={{ fontSize:12, color:GREEN, fontWeight:600, padding:'5px 10px' }}>✓ Approved</span>
+                                  ) : (
+                                    <button onClick={() => approvePost(slot.id, [activePlatform])}
+                                      style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:GREEN, borderColor:GREEN }}>
+                                      ✓ Approve
+                                    </button>
+                                  );
+                                })()}
                               </>
                             )}
                           </div>
                         </div>
+
+                        {/* Image feedback panel */}
+                        {imgFeedbackSlotId === slot.id && (
+                          <div style={{ marginTop: 8, padding: '10px 12px', background: BLUE_BG, borderRadius: 8, border: `1px solid ${BORDER}` }}>
+                            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>What should be improved? (optional)</div>
+                            <textarea
+                              value={imgFeedbackText}
+                              onChange={e => setImgFeedbackText(e.target.value)}
+                              placeholder="e.g. Use a darker background, make the stat larger, don't use Template 3..."
+                              style={{ width: '100%', minHeight: 64, padding: 8, borderRadius: 6, border: `1px solid ${BORDER}`, fontSize: 12, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                              <button onClick={() => {
+                                if (imgFeedbackText.trim()) {
+                                  const entry = { slotId: slot.id, articleUrl: slot.article?.url, feedback: imgFeedbackText.trim(), timestamp: new Date().toISOString() };
+                                  setImageFeedbackHistory(prev => {
+                                    const next = [...prev, entry];
+                                    try { localStorage.setItem('innago-image-feedback', JSON.stringify(next)); } catch {}
+                                    return next;
+                                  });
+                                }
+                                generateImageWithFeedback(slot, imgFeedbackText.trim());
+                                setImgFeedbackSlotId(null);
+                                setImgFeedbackText('');
+                              }} style={{ ...primaryBtn, fontSize: 12, padding: '6px 16px' }}>Regenerate</button>
+                              <button onClick={() => { setImgFeedbackSlotId(null); setImgFeedbackText(''); }}
+                                style={{ ...outlineBtn, fontSize: 12, padding: '6px 12px' }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Not on this platform */}
                         {!platformIncluded && (
@@ -1743,6 +1979,15 @@ export default function Dashboard() {
                                           fontSize:12, color:plEditing?BLUE:MUTED, padding:'2px 6px', fontWeight:plEditing?600:400 }}>
                                         {plEditing ? 'Save' : 'Edit'}
                                       </button>
+                                      {slotApproved?.platforms?.includes(pl) ? (
+                                        <span style={{ fontSize:11, color:GREEN, fontWeight:600, padding:'2px 6px' }}>✓ Approved</span>
+                                      ) : (
+                                        <button onClick={() => approvePost(slot.id, [pl])}
+                                          style={{ background:'none', border:'none', cursor:'pointer',
+                                            fontSize:12, color:GREEN, padding:'2px 6px', fontWeight:600 }}>
+                                          ✓ Approve
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                   {plEditing ? (
