@@ -219,7 +219,7 @@ URL: ${url}
 Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before the URL. Keep Innago brand voice (no rhetorical questions, no em dashes, no hashtags, no exclamation points). Return ONLY the rewritten post text.`;
 
   const msg = await client.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-4-6',
     max_tokens: 100,
     messages: [{ role: 'user', content: prompt }],
   });
@@ -264,7 +264,7 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
   let posts;
   try {
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 800,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
