@@ -765,17 +765,6 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ marginLeft:'auto', display:'flex', gap:10, alignItems:'center' }}>
-          {!generating ? (
-            <button onClick={handleGenerate}
-              disabled={newCustomSlots.length === 0}
-              style={{ ...primaryBtn, opacity: newCustomSlots.length === 0 ? 0.5 : 1 }}>
-              {newCustomSlots.length === 0
-                ? 'All slots generated'
-                : `Generate ${newCustomSlots.length} New Slot${newCustomSlots.length !== 1 ? 's' : ''}`}
-            </button>
-          ) : (
-            <button onClick={() => { abortRef.current=true; }} style={{ ...primaryBtn, background:RED }}>Stop</button>
-          )}
           {tab==='review' && doneCount > 0 && (
             <>
               <button onClick={exportCSV} style={outlineBtn}>Export CSV</button>
@@ -1294,13 +1283,25 @@ export default function Dashboard() {
                     style={{ ...outlineBtn, fontSize:12, padding:'4px 12px', marginTop:2 }}>+ Add another URL</button>
                 </Field>
 
-                <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
                   <button onClick={()=>{ addRecurring(); if (specificUrls.some(u=>u.trim())) addSpecificSlots(); }}
                     disabled={!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length}
                     style={{ ...primaryBtn,
                       opacity:(!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length)?0.5:1 }}>
                     Add to Schedule
                   </button>
+                  {!generating ? (
+                    <button onClick={handleGenerate}
+                      disabled={newCustomSlots.length === 0}
+                      style={{ ...primaryBtn, background: newCustomSlots.length === 0 ? MUTED : GREEN,
+                        opacity: newCustomSlots.length === 0 ? 0.5 : 1 }}>
+                      {newCustomSlots.length === 0
+                        ? 'All slots generated'
+                        : `Generate ${newCustomSlots.length} New Slot${newCustomSlots.length !== 1 ? 's' : ''}`}
+                    </button>
+                  ) : (
+                    <button onClick={() => { abortRef.current=true; }} style={{ ...primaryBtn, background:RED }}>Stop</button>
+                  )}
                   {recurForm.startDate && recurForm.endDate && recurForm.days.length > 0 && (() => {
                     const cur = new Date(recurForm.startDate+'T00:00:00');
                     const end = new Date(recurForm.endDate+'T00:00:00');
