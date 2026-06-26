@@ -765,6 +765,17 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ marginLeft:'auto', display:'flex', gap:10, alignItems:'center' }}>
+          {!generating ? (
+            <button onClick={handleGenerate}
+              disabled={newCustomSlots.length === 0}
+              style={{ ...primaryBtn, opacity: newCustomSlots.length === 0 ? 0.5 : 1 }}>
+              {newCustomSlots.length === 0
+                ? 'All slots generated'
+                : `Generate ${newCustomSlots.length} New Slot${newCustomSlots.length !== 1 ? 's' : ''}`}
+            </button>
+          ) : (
+            <button onClick={() => { abortRef.current=true; }} style={{ ...primaryBtn, background:RED }}>Stop</button>
+          )}
           {tab==='review' && doneCount > 0 && (
             <>
               <button onClick={exportCSV} style={outlineBtn}>Export CSV</button>
@@ -789,17 +800,6 @@ export default function Dashboard() {
                 </button>
               )}
             </>
-          )}
-          {!generating ? (
-            <button onClick={handleGenerate}
-              disabled={newCustomSlots.length === 0}
-              style={{ ...primaryBtn, opacity: newCustomSlots.length === 0 ? 0.5 : 1 }}>
-              {newCustomSlots.length === 0
-                ? 'All slots generated'
-                : `Generate ${newCustomSlots.length} New Slot${newCustomSlots.length !== 1 ? 's' : ''}`}
-            </button>
-          ) : (
-            <button onClick={() => { abortRef.current=true; }} style={{ ...primaryBtn, background:RED }}>Stop</button>
           )}
         </div>
       </header>
