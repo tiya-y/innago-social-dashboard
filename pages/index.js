@@ -167,6 +167,8 @@ export default function Dashboard() {
       if (imgFbStr) { try { setImageFeedbackHistory(JSON.parse(imgFbStr)); } catch {} }
       const hooksStr = localStorage.getItem('innago-twitter-hooks');
       if (hooksStr) { try { setTwitterHooks(JSON.parse(hooksStr)); } catch {} }
+      const usedStr = localStorage.getItem('innago-used-articles');
+      if (usedStr) { try { setUsedArticleUrls(new Set(JSON.parse(usedStr))); } catch {} }
     } catch {}
   }, []);
 
@@ -213,6 +215,9 @@ export default function Dashboard() {
 
   // ── Twitter hook variety tracking ───────────────────────────
   const [twitterHooks, setTwitterHooks] = useState([]);
+
+  // ── Used articles tracking ───────────────────────────────────
+  const [usedArticleUrls, setUsedArticleUrls] = useState(new Set());
 
   // ── Derived ──────────────────────────────────
   const doneCount = Object.keys(posts).length;
@@ -410,8 +415,10 @@ export default function Dashboard() {
       const allUsed = [...new Set([...prevUsed, ...usedThisRun])];
       if (allUsed.length < allArticles.length * 0.8) {
         localStorage.setItem('innago-used-articles', JSON.stringify(allUsed));
+        setUsedArticleUrls(new Set(allUsed));
       } else {
         localStorage.removeItem('innago-used-articles');
+        setUsedArticleUrls(new Set());
       }
     } catch {}
 
@@ -601,6 +608,7 @@ export default function Dashboard() {
         const used = new Set(JSON.parse(localStorage.getItem('innago-used-articles') || '[]'));
         used.add(articleUrl);
         localStorage.setItem('innago-used-articles', JSON.stringify([...used]));
+        setUsedArticleUrls(new Set(used));
       } catch {}
     }
   };
@@ -1030,13 +1038,49 @@ export default function Dashboard() {
             {/* ── Article Library (collapsible panel) ── */}
             <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
               {/* Header row */}
-              <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px', flexWrap:'wrap' }}>
                 <span style={{ fontSize:14, fontWeight:600, color:TEXT }}>Article Library</span>
                 <span style={{ fontSize:13, color:MUTED }}>
                   {scrapedArticles.length > 0
                     ? `${allArticles.length} articles (${scrapedArticles.length} live + ${ALL_ARTICLES.length - (allArticles.length - scrapedArticles.length)} seed)`
                     : `${ALL_ARTICLES.length} seed articles`}
                 </span>
+                {/* Used/remaining cycle counter */}
+                {(() => {
+                  const total = allArticles.length;
+                  const used = allArticles.filter(a => usedArticleUrls.has(a.url)).length;
+                  const remaining = total - used;
+                  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+                  return (
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginLeft:4 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, background: used > 0 ? '#fff7ed' : BLUE_BG,
+                        border:`1px solid ${used > 0 ? '#fed7aa' : BORDER}`, borderRadius:999,
+                        padding:'3px 10px', fontSize:12 }}>
+                        <span style={{ color: used > 0 ? '#c2410c' : MUTED }}>
+                          {used} used
+                        </span>
+                        <span style={{ color:BORDER }}>·</span>
+                        <span style={{ color: remaining < 20 ? RED : GREEN, fontWeight:600 }}>
+                          {remaining} left
+                        </span>
+                        <span style={{ color:MUTED }}>/ {total}</span>
+                      </div>
+                      {used > 0 && (
+                        <div style={{ width:64, height:6, background:BORDER, borderRadius:999, overflow:'hidden' }}>
+                          <div style={{ width:`${pct}%`, height:'100%', background: pct > 80 ? RED : pct > 50 ? YELLOW : GREEN, borderRadius:999, transition:'width 0.3s' }} />
+                        </div>
+                      )}
+                      {used > 0 && (
+                        <button onClick={() => {
+                          localStorage.removeItem('innago-used-articles');
+                          setUsedArticleUrls(new Set());
+                        }} style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:11, padding:0, textDecoration:'underline' }}>
+                          reset
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 <button onClick={() => setLibraryOpen(o => !o)}
                   style={{ background:'none', border:'none', cursor:'pointer', color:MUTED, fontSize:13, padding:'2px 6px', marginLeft:4 }}>
                   {libraryOpen ? '▲' : '▼'}
@@ -1101,21 +1145,32 @@ export default function Dashboard() {
                               {cat}
                             </span>
                             <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-                              <span style={{ fontSize:11, color:isOpen?BLUE:MUTED, fontWeight:400 }}>{displayArticles.length} articles</span>
+                              {(() => {
+                                const usedInCat = displayArticles.filter(a => usedArticleUrls.has(a.url)).length;
+                                return (
+                                  <span style={{ fontSize:11, color:isOpen?BLUE:MUTED, fontWeight:400 }}>
+                                    {displayArticles.length} articles{usedInCat > 0 ? ` · ${usedInCat} used` : ''}
+                                  </span>
+                                );
+                              })()}
                               <span style={{ fontSize:12, color:isOpen?BLUE:MUTED }}>{isOpen ? '▲' : '▼'}</span>
                             </span>
                           </button>
                           {isOpen && (
                             <div style={{ padding:'8px 14px 12px', background:BG,
                               display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px 16px' }}>
-                              {displayArticles.map(a => (
+                              {displayArticles.map(a => {
+                                const isUsed = usedArticleUrls.has(a.url);
+                                return (
                                 <a key={a.url} href={a.url} target="_blank" rel="noreferrer"
-                                  style={{ fontSize:12, color:BLUE, textDecoration:'none', lineHeight:1.5,
-                                    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
-                                  title={a.displayTitle}>
+                                  style={{ fontSize:12, color: isUsed ? MUTED : BLUE, textDecoration: isUsed ? 'line-through' : 'none',
+                                    lineHeight:1.5, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+                                    opacity: isUsed ? 0.5 : 1 }}
+                                  title={`${a.displayTitle}${isUsed ? ' (used)' : ''}`}>
                                   {a.displayTitle}
                                 </a>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
