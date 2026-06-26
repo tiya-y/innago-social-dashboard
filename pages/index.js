@@ -399,7 +399,7 @@ export default function Dashboard() {
         const fresh = pool.filter(a => !prevUsed.has(a.url) && !usedThisRun.has(a.url));
         const source = fresh.length > 0 ? fresh : pool.filter(a => !usedThisRun.has(a.url));
         const finalPool = source.length > 0 ? source : pool;
-        article = finalPool[i % finalPool.length];
+        article = finalPool[Math.floor(Math.random() * finalPool.length)];
       }
       usedThisRun.add(article.url);
 
