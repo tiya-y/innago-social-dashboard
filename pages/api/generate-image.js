@@ -64,6 +64,27 @@ That is 3–5 elements total. NOTHING ELSE. No cards. No boxes with text inside.
 5. No ALL CAPS except the eyebrow label. Sentence case everywhere else.
 6. No emojis, no hashtags, no fabricated quotes.
 
+━━━━━━━━━━━  HERO STAT RULE — NON-NEGOTIABLE  ━━━━━━━━━━━
+The hero element is ONLY a standalone number that is self-evidently significant on its own.
+ALLOWED as hero: percentages (72%), dollar figures ($4,200), multipliers (3×), large counts (1,200+)
+NOT ALLOWED as hero: rankings (#1, #3), ordinals, abbreviations (NNN, ROI, CAM), acronyms, or any term that requires the descriptor to make sense. If "#1" only means something because of "cause of security deposit disputes" — then "#1 cause of security deposit disputes" is the descriptor, NOT the hero. Use a percentage or dollar figure as the hero instead, or use Template 7 with a short headline.
+NEVER use an acronym or abbreviation as the hero (NNN, ROI, CAM, HOA, LTV, etc.). Spell it out or find a stat instead.
+
+━━━━━━━━━━━  COLOR RULE — NON-NEGOTIABLE  ━━━━━━━━━━━
+Text color must contrast with the background. Follow this strictly:
+- Dark/colored background (blue, purple, navy, gradient): use WHITE or #DDF247 lime for all text. Never use dark colors (#2E3B47, #8A47DF, #2675FF, black) as text on a dark background.
+- White/light background: use #2E3B47 dark navy or #2675FF blue for text. Never use white text on a white or near-white background.
+When in doubt: white text on dark backgrounds. Dark text on light backgrounds. No exceptions.
+
+━━━━━━━━━━━  SPACING RULE — NON-NEGOTIABLE  ━━━━━━━━━━━
+The canvas is 1080×1080px. Distribute elements across the FULL height — do not cluster everything in the top 500px and leave the bottom half empty.
+- Logo: top area (~68–100px from top)
+- Eyebrow: ~160–220px from top
+- Hero: ~300–480px from top (centered vertically or upper-center)
+- Descriptor: ~580–720px from top
+- Bottom zone (720–1000px): must have at least one element or a visible decorative element. If there is no 5th text element, place a decorative shape, a colored bar, or a second logo in the bottom zone to fill the space.
+No large blank zones. If the bottom 40% of the canvas is empty — fix it.
+
 ━━━━━━━━━━━  CONTENT RULE  ━━━━━━━━━━━
 Read the article body. Extract ONE compelling stat, number, or insight.
 Do NOT restate the title. Do NOT copy the summary. Surface something concrete — a number, dollar figure, percentage, or a sharp 5-word insight.
