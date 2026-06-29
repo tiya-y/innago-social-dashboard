@@ -1958,7 +1958,7 @@ export default function Dashboard() {
                         {platformIncluded && !isLoading && !p && <div style={{ color:'#d1d5db', fontSize:14 }}>Pending</div>}
                         {platformIncluded && p?.error && (
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                            <span style={{ color:RED, fontSize:14 }}>{p.error}{p.detail ? ` — ${p.detail.slice(0,120)}` : ''}</span>
+                            <span style={{ color:RED, fontSize:13, wordBreak:'break-word', whiteSpace:'pre-wrap' }}>{p.error}{p.detail ? ` — ${p.detail.slice(0,300)}` : ''}</span>
                             <button onClick={()=>regenerateSingle(slot)}
                               style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:RED, borderColor:RED }}>
                               Retry
