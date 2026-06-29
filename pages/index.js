@@ -134,25 +134,14 @@ export default function Dashboard() {
   // ── Generated images (per slot) ─────────────
   const [generatedImages, setGeneratedImages] = useState({});  // slotId → { html, loading }
 
-  // ── Anthropic API key (entered in UI) ────────
-  // API keys — initialized empty, loaded from localStorage after mount (Next.js SSR safe)
-  const [anthropicKey, setAnthropicKey] = useState('');
-  const [bitlyKey, setBitlyKey] = useState('');
-  const [blotatoKey, setBlotatoKey] = useState('');
 
   // Load all persisted data from localStorage after mount
   useEffect(() => {
     try {
-      const ak   = localStorage.getItem('innago-anthropic-key');
-      const bitk = localStorage.getItem('innago-bitly-key');
-      const blk  = localStorage.getItem('innago-blotato-key');
       const slots    = localStorage.getItem('innago-custom-slots');
       const sched    = localStorage.getItem('innago-schedule');
       const postsStr = localStorage.getItem('innago-posts');
       const statStr  = localStorage.getItem('innago-schedule-status');
-      if (ak)       setAnthropicKey(ak);
-      if (bitk)     setBitlyKey(bitk);
-      if (blk)      setBlotatoKey(blk);
       const acctMap = localStorage.getItem('innago-account-mapping');
       if (slots)    { try { setCustomSlots(JSON.parse(slots));         } catch {} }
       if (sched)    { try { setSchedule(JSON.parse(sched));             } catch {} }
@@ -172,9 +161,6 @@ export default function Dashboard() {
     } catch {}
   }, []);
 
-  const saveAnthropicKey = (key) => { setAnthropicKey(key); try { localStorage.setItem('innago-anthropic-key', key); } catch {} };
-  const saveBitlyKey     = (key) => { setBitlyKey(key);     try { localStorage.setItem('innago-bitly-key', key);     } catch {} };
-  const saveBlotatoKey   = (key) => { setBlotatoKey(key);   try { localStorage.setItem('innago-blotato-key', key);   } catch {} };
   const [accounts, setAccounts] = useState(null);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState('');
@@ -233,7 +219,7 @@ export default function Dashboard() {
     setAccountsError('');
     try {
       const res = await fetch('/api/blotato/accounts', {
-        headers: blotatoKey ? { 'blotato-api-key': blotatoKey } : {},
+        headers: {},
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load accounts');
@@ -358,10 +344,6 @@ export default function Dashboard() {
 
   const handleGenerate = async () => {
     if (!newCustomSlots.length) return;
-    if (!anthropicKey) {
-      alert('Anthropic API key is missing. Go to the Settings tab and enter your key.');
-      return;
-    }
     setGenerating(true);
     abortRef.current = false;
     setTab('review');
@@ -440,7 +422,7 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks }),
         });
         postData = await r.json();
         if (postData?.error) {
@@ -477,7 +459,6 @@ export default function Dashboard() {
               summary: slot.article?.summary || '',
               content_type: slot.article?.content_type || 'blog post',
               url: slot.article?.url,
-              anthropicKey: anthropicKey || undefined,
               templateIndex: i,
             }),
           });
@@ -513,7 +494,6 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          blotatoApiKey: blotatoKey || undefined,
           slot: { date: slot.date, ...postData },
           accountMapping: Object.fromEntries(
             Object.entries(accountMapping).filter(([p, v]) =>
@@ -554,7 +534,6 @@ export default function Dashboard() {
           scheduledTime: platformStatus.scheduledTime || undefined,
           accountId: platformStatus.accountId || undefined,
           platform,
-          blotatoApiKey: blotatoKey || undefined,
         }),
       });
       const data = await res.json();
@@ -586,7 +565,7 @@ export default function Dashboard() {
       const r = await fetch('/api/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, anthropicKey: anthropicKey || undefined, bitlyKey: bitlyKey || undefined, recentTwitterHooks: twitterHooks }),
+        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks }),
       });
       const postData = await r.json();
       setPosts(p => ({ ...p, [slot.id]: postData }));
@@ -638,8 +617,6 @@ export default function Dashboard() {
           summary: slot.article?.summary || '',
           content_type: slot.article?.content_type || 'blog post',
           url: slot.article?.url,
-          anthropicKey: anthropicKey || undefined,
-          bitlyKey: bitlyKey || undefined,
           templateIndex: schedule ? schedule.findIndex(s => s.id === slot.id) : undefined,
         }),
       });
@@ -664,8 +641,6 @@ export default function Dashboard() {
           summary: slot.article?.summary || '',
           content_type: slot.article?.content_type || 'blog post',
           url: slot.article?.url,
-          anthropicKey: anthropicKey || undefined,
-          bitlyKey: bitlyKey || undefined,
           templateIndex: schedule ? schedule.findIndex(s => s.id === slot.id) : undefined,
           feedback: feedback || undefined,
           feedbackHistory: imageFeedbackHistory.length > 0 ? imageFeedbackHistory : undefined,
@@ -1337,73 +1312,14 @@ export default function Dashboard() {
         {tab==='blotato' && (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:22 }}>
 
-            {/* Anthropic key — full width */}
-            <div style={{ gridColumn:'1/-1' }}>
-              <Card title="Anthropic API Key">
-                <p style={{ margin:'0 0 14px', fontSize:13, color:MUTED }}>
-                  Required for generating post copy. Get your key at{' '}
-                  <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ color:BLUE }}>
-                    console.anthropic.com
-                  </a>{' '}
-                  → API Keys. Make sure billing is set up or the key won't work.
-                </p>
-                <Field label="Anthropic API key">
-                  <input
-                    type="password"
-                    placeholder="sk-ant-api03-..."
-                    value={anthropicKey}
-                    onChange={e => saveAnthropicKey(e.target.value)}
-                    style={input}
-                  />
-                </Field>
-                {anthropicKey && (
-                  <div style={{ marginTop:10, padding:'8px 12px', background:'#f0fdf4',
-                    border:'1px solid #bbf7d0', borderRadius:8, fontSize:13, color:GREEN }}>
-                    ✓ Key saved — will be used for all post generation
-                  </div>
-                )}
-                {!anthropicKey && (
-                  <div style={{ marginTop:10, padding:'8px 12px', background:'#fef9ec',
-                    border:'1px solid #fde68a', borderRadius:8, fontSize:13, color:YELLOW }}>
-                    ⚠ No key entered — post generation will fail
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            <Card title="Bitly API Key">
-              <p style={{ margin:'0 0 14px', fontSize:13, color:MUTED }}>
-                Used to shorten article links on LinkedIn, Facebook, and Twitter/X. UTM tracking parameters are preserved inside the short link.
-                Get your key at <a href="https://app.bitly.com/settings/api" target="_blank" rel="noreferrer" style={{ color:BLUE }}>app.bitly.com/settings/api</a>.
-              </p>
-              <Field label="Bitly access token">
-                <input type="password" placeholder="Paste your Bitly access token…"
-                  value={bitlyKey} onChange={e=>saveBitlyKey(e.target.value)} style={input} />
-              </Field>
-              {bitlyKey ? (
-                <div style={{ marginTop:10, padding:'8px 12px', background:'#f0fdf4',
-                  border:'1px solid #bbf7d0', borderRadius:8, fontSize:13, color:GREEN }}>
-                  ✓ Key saved — links will be shortened via Bitly
-                </div>
-              ) : (
-                <div style={{ marginTop:10, padding:'8px 12px', background:'#fef9ec',
-                  border:'1px solid #fde68a', borderRadius:8, fontSize:13, color:YELLOW }}>
-                  ⚠ No Bitly key — links will be shortened via TinyURL (free fallback, no analytics)
-                </div>
-              )}
-            </Card>
-
             <Card title="Blotato Connection">
               <p style={{ margin:'0 0 14px', fontSize:13, color:MUTED }}>
-                Enter your Blotato API key, or set <code>BLOTATO_API_KEY</code> as a Vercel environment variable (more secure).
-                Find your key at my.blotato.com → Settings → API.
+                API keys (Anthropic, Blotato, Bitly) are configured as Vercel environment variables — no manual entry needed.
               </p>
-              <Field label="Blotato API key">
-                <input type="password"
-                  placeholder={process.env.NEXT_PUBLIC_HAS_BLOTATO_KEY==='true' ? '••••• (set via env var)' : 'paste your API key here'}
-                  value={blotatoKey} onChange={e=>saveBlotatoKey(e.target.value)} style={input} />
-              </Field>
-              <p style={{ margin:'14px 0 0', fontSize:12, color:MUTED }}>
+              <div style={{ padding:'8px 12px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, fontSize:13, color:GREEN, marginBottom:14 }}>
+                ✓ Keys loaded from environment — generation and scheduling are ready
+              </div>
+              <p style={{ margin:'0 0 14px', fontSize:12, color:MUTED }}>
                 Post times are set per-slot in the Schedule tab. This fallback only applies if a slot has no time set.
               </p>
               <Field label="Auto-schedule after generation">

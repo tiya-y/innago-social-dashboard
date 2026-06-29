@@ -238,7 +238,8 @@ function enforceOverflow(html) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { title, summary = '', content_type = 'blog post', url = '', anthropicKey, templateIndex, feedback, feedbackHistory } = req.body;
+  const { title, summary = '', content_type = 'blog post', url = '', templateIndex, feedback, feedbackHistory } = req.body;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
   const articleBody = await fetchArticleBody(url);
@@ -274,7 +275,7 @@ Render it as: <img src="INNAGO_LOGO" style="height:36px;display:block;" alt="inn
 Return ONLY the raw HTML <div> (1080×1080px). No DOCTYPE, no html/head/body tags, no markdown fences.`;
 
   try {
-    const client = new Anthropic({ apiKey: anthropicKey || process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: anthropicKey });
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,

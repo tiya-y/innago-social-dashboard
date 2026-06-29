@@ -230,7 +230,9 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { url, displayTitle, date, boostedTopic, anthropicKey, bitlyKey, recentTwitterHooks } = req.body;
+  const { url, displayTitle, date, boostedTopic, recentTwitterHooks } = req.body;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const bitlyKey = process.env.BITLY_API_KEY;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   // Fetch article metadata
@@ -259,7 +261,7 @@ Do not write about password resets, account creation, or login pages.${boostedTo
 ${twitterHookRule}
 Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform's post differently.`;
 
-  const client = new Anthropic({ apiKey: anthropicKey || process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({ apiKey: anthropicKey });
 
   let posts;
   try {
