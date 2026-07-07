@@ -358,6 +358,11 @@ export default function Dashboard() {
 
     // ISO week tracking — seed with weeks already in the existing schedule
     const weeksSeen = new Set((schedule || []).map(s => isoWeekKey(s.date)));
+    const igWeeksSeen = new Set(
+      (schedule || [])
+        .filter(s => !s.platforms || s.platforms.includes('instagram'))
+        .map(s => isoWeekKey(s.date))
+    );
 
     const newPlan = sorted.map((slot, i) => {
       let article;
@@ -393,7 +398,18 @@ export default function Dashboard() {
       const isFirstOfWeek = !weeksSeen.has(wk);
       if (isFirstOfWeek) weeksSeen.add(wk);
 
-      return { ...slot, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek };
+      // Enforce Instagram once per week
+      let platforms = slot.platforms || ['linkedin', 'twitter', 'instagram', 'facebook'];
+      const slotWk = isoWeekKey(slot.date);
+      if (platforms.includes('instagram')) {
+        if (igWeeksSeen.has(slotWk)) {
+          platforms = platforms.filter(p => p !== 'instagram');
+        } else {
+          igWeeksSeen.add(slotWk);
+        }
+      }
+
+      return { ...slot, platforms, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek };
     });
 
     // Save used URLs
