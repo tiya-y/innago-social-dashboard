@@ -29,8 +29,10 @@ export default async function handler(req, res) {
     const text = slot[POST_FIELD[platform]] || slot.post || '';
     if (!text) continue;
 
-    // Build ISO 8601 scheduled time (assume UTC if no tz)
-    const scheduledTime = `${slot.date}T${(postingTime || '09:00')}:00.000Z`;
+    // Times from the UI are Eastern — add UTC-4 offset (EDT) so Blotato shows correct local time
+    // 14:00 UTC = 10:00 AM EDT
+    const rawTime = postingTime || slot.time || '14:00';
+    const scheduledTime = `${slot.date}T${rawTime}:00-04:00`;
 
     // Build mediaUrls — Instagram needs an image
     const mediaUrls = [];
