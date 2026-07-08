@@ -290,17 +290,17 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
     }
   }
 
-  // Only shorten LinkedIn URLs (TinyURL fallback when no Bitly key)
-  // Twitter and Facebook use full UTM-tagged URLs
-  const twitterUtmUrl  = tagUrl(url, 'twitter',  date);
+  // Only shorten Twitter URLs (TinyURL fallback when no Bitly key)
+  // LinkedIn and Facebook use full UTM-tagged URLs
+  const linkedinUtmUrl = tagUrl(url, 'linkedin', date);
   const facebookUtmUrl = tagUrl(url, 'facebook', date);
-  const linkedinLong   = tagUrl(url, 'linkedin', date);
-  const linkedinShortUrl = bitlyKey
-    ? await shortenWithBitly(linkedinLong, bitlyKey)
-    : await shortenWithTinyUrl(linkedinLong);
+  const twitterLong    = tagUrl(url, 'twitter',  date);
+  const twitterShortUrl = bitlyKey
+    ? await shortenWithBitly(twitterLong, bitlyKey)
+    : await shortenWithTinyUrl(twitterLong);
 
-  const post_twitter_x = twitterPost.replace(url, twitterUtmUrl);
-  const post_linkedin  = (posts.linkedin  || posts.twitter || twitterPost).replace(url, linkedinShortUrl);
+  const post_twitter_x = twitterPost.replace(url, twitterShortUrl);
+  const post_linkedin  = (posts.linkedin  || posts.twitter || twitterPost).replace(url, linkedinUtmUrl);
   const post_facebook  = (posts.facebook  || posts.linkedin || '').replace(url, facebookUtmUrl);
 
   // Instagram: no URL in caption — remove any URL that slipped through, ensure "Link in bio." is present
