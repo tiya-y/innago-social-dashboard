@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'BLOTATO_API_KEY not set in environment' });
 
   try {
-    const r = await fetch('https://app.blotato.com/api/social-accounts', {
+    const r = await fetch('https://backend.blotato.com/v2/users/me/accounts', {
       headers: { 'blotato-api-key': apiKey },
     });
     const data = await r.json();
@@ -13,13 +13,14 @@ export default async function handler(req, res) {
 
     // Normalize into { platform: [{ accountId, name, pages }] }
     const accounts = { twitter: [], instagram: [], facebook: [], linkedin: [] };
-    for (const acct of data?.data || data?.accounts || []) {
-      const pl = acct.platform?.toLowerCase();
-      if (accounts[pl]) {
+    const rawList = Array.isArray(data) ? data : (data?.data || data?.accounts || []);
+    for (const acct of rawList) {
+      const pl = (acct.platform || acct.type || '').toLowerCase();
+      if (accounts[pl] !== undefined) {
         accounts[pl].push({
-          accountId: acct.accountId || acct.id,
-          name: acct.name || acct.username || acct.accountId,
-          pages: acct.pages || [],
+          accountId: acct.id || acct.accountId,
+          name: acct.name || acct.username || acct.id,
+          pages: acct.subaccounts || acct.pages || [],
         });
       }
     }

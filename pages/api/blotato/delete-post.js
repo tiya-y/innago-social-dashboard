@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!postId) return res.status(400).json({ error: 'postId required' });
 
   try {
-    const r = await fetch(`https://app.blotato.com/api/posts/${postId}`, {
+    const r = await fetch(`https://backend.blotato.com/v2/schedules/${postId}`, {
       method: 'DELETE',
       headers: { 'blotato-api-key': apiKey },
     });

@@ -8,10 +8,18 @@ export default async function handler(req, res) {
   if (!slot || !accountMapping) return res.status(400).json({ error: 'slot and accountMapping required' });
 
   const POST_FIELD = {
-    twitter: 'post_twitter_x',
+    twitter:   'post_twitter_x',
     instagram: 'post_instagram',
-    facebook: 'post_facebook',
-    linkedin: 'post_linkedin',
+    facebook:  'post_facebook',
+    linkedin:  'post_linkedin',
+  };
+
+  // Platform → Blotato targetType
+  const TARGET_TYPE = {
+    twitter:   'twitter',
+    instagram: 'instagram',
+    facebook:  'facebook',
+    linkedin:  'linkedin',
   };
 
   const results = {};
@@ -21,31 +29,48 @@ export default async function handler(req, res) {
     const text = slot[POST_FIELD[platform]] || slot.post || '';
     if (!text) continue;
 
-    const scheduledTime = `${slot.date}T${postingTime || '09:00'}:00`;
+    // Build ISO 8601 scheduled time (assume UTC if no tz)
+    const scheduledTime = `${slot.date}T${(postingTime || '09:00')}:00.000Z`;
 
-    const body = {
-      accountId: mapping.accountId,
-      ...(mapping.pageId ? { pageId: mapping.pageId } : {}),
-      platform,
-      scheduledTime,
-      post: { text },
-    };
-
+    // Build mediaUrls — Instagram needs an image
+    const mediaUrls = [];
     if (platform === 'instagram' && slot.image_url) {
-      body.post.mediaUrls = [slot.image_url];
+      mediaUrls.push(slot.image_url);
     }
 
+    // Build target object per platform
+    const target = { targetType: TARGET_TYPE[platform] };
+    if ((platform === 'facebook' || platform === 'instagram') && mapping.pageId) {
+      target.pageId = mapping.pageId;
+    }
+    if (platform === 'linkedin' && mapping.pageId) {
+      target.pageId = mapping.pageId;
+    }
+
+    const body = {
+      post: {
+        accountId: mapping.accountId,
+        content: {
+          text,
+          mediaUrls,
+          platform: TARGET_TYPE[platform],
+        },
+        target,
+      },
+      scheduledTime,
+    };
+
     try {
-      const r = await fetch('https://app.blotato.com/api/posts', {
+      const r = await fetch('https://backend.blotato.com/v2/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'blotato-api-key': apiKey },
         body: JSON.stringify(body),
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (r.ok) {
-        results[platform] = { ok: true, postId: data?.id || data?.postId, scheduledTime, accountId: mapping.accountId };
+        results[platform] = { ok: true, postId: data?.id || data?.postId, scheduledTime };
       } else {
-        results[platform] = { ok: false, error: data?.message || 'Failed' };
+        results[platform] = { ok: false, error: data?.message || JSON.stringify(data) || 'Failed' };
       }
     } catch (err) {
       results[platform] = { ok: false, error: err.message };
