@@ -290,20 +290,18 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
     }
   }
 
-  // Shorten all UTM-tagged URLs via Bitly (falls back to TinyURL for Twitter, full URL otherwise)
-  const shorten = (longUrl) => bitlyKey
-    ? shortenWithBitly(longUrl, bitlyKey)
-    : shortenWithTinyUrl(longUrl);
+  // Only shorten LinkedIn URLs (TinyURL fallback when no Bitly key)
+  // Twitter and Facebook use full UTM-tagged URLs
+  const twitterUtmUrl  = tagUrl(url, 'twitter',  date);
+  const facebookUtmUrl = tagUrl(url, 'facebook', date);
+  const linkedinLong   = tagUrl(url, 'linkedin', date);
+  const linkedinShortUrl = bitlyKey
+    ? await shortenWithBitly(linkedinLong, bitlyKey)
+    : await shortenWithTinyUrl(linkedinLong);
 
-  const [twitterShortUrl, linkedinShortUrl, facebookShortUrl] = await Promise.all([
-    shorten(tagUrl(url, 'twitter',  date)),
-    shorten(tagUrl(url, 'linkedin', date)),
-    shorten(tagUrl(url, 'facebook', date)),
-  ]);
-
-  const post_twitter_x = twitterPost.replace(url, twitterShortUrl);
+  const post_twitter_x = twitterPost.replace(url, twitterUtmUrl);
   const post_linkedin  = (posts.linkedin  || posts.twitter || twitterPost).replace(url, linkedinShortUrl);
-  const post_facebook  = (posts.facebook  || posts.linkedin || '').replace(url, facebookShortUrl);
+  const post_facebook  = (posts.facebook  || posts.linkedin || '').replace(url, facebookUtmUrl);
 
   // Instagram: no URL in caption — remove any URL that slipped through, ensure "Link in bio." is present
   let instagramCaption = posts.instagram || posts.linkedin || '';
