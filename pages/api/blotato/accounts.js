@@ -13,13 +13,14 @@ export default async function handler(req, res) {
 
     // Normalize into { platform: [{ accountId, name, pages }] }
     const accounts = { twitter: [], instagram: [], facebook: [], linkedin: [] };
-    const rawList = Array.isArray(data) ? data : (data?.data || data?.accounts || []);
+    const rawList = Array.isArray(data) ? data : (data?.items || data?.data || data?.accounts || []);
     for (const acct of rawList) {
       const pl = (acct.platform || acct.type || '').toLowerCase();
       if (accounts[pl] !== undefined) {
         accounts[pl].push({
           accountId: acct.id || acct.accountId,
-          name: acct.name || acct.username || acct.id,
+          fullname: acct.fullname || acct.name || acct.username || acct.id,
+          username: acct.username || acct.name || acct.id,
           pages: acct.subaccounts || acct.pages || [],
         });
       }
