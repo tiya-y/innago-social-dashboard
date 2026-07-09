@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { CATEGORIES, ALL_ARTICLES } from '../lib/articles';
+import { RG_CATEGORIES, RG_ALL_ARTICLES } from '../lib/reigrove-articles';
 
 // ── Design tokens ─────────────────────────────────────────────
 const BLUE = '#2676FF';
@@ -98,6 +99,7 @@ function uid() { return `slot-${Date.now()}-${++_uid}`; }
 // ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [tab, setTab] = useState('config');
+  const [brand, setBrand] = useState('innago'); // 'innago' | 'reigrove'
 
   // ── Custom slot builder ──────────────────────
   // A slot: { id, date, time, platforms: string[], category: string, topicOverride: string, articleUrl: string }
@@ -158,6 +160,8 @@ export default function Dashboard() {
       if (hooksStr) { try { setTwitterHooks(JSON.parse(hooksStr)); } catch {} }
       const usedStr = localStorage.getItem('innago-used-articles');
       if (usedStr) { try { setUsedArticleUrls(new Set(JSON.parse(usedStr))); } catch {} }
+      const brandStr = localStorage.getItem('social-studio-brand');
+      if (brandStr === 'reigrove' || brandStr === 'innago') setBrand(brandStr);
     } catch {}
   }, []);
 
@@ -188,7 +192,7 @@ export default function Dashboard() {
 
   // ── Custom articles (manually added to library) ──────────────
   const [newArticleUrl, setNewArticleUrl] = useState('');
-  const [newArticleCategory, setNewArticleCategory] = useState(Object.keys(CATEGORIES)[0]);
+  const [newArticleCategory, setNewArticleCategory] = useState('');
   const [customArticles, setCustomArticles] = useState([]);
 
   // ── Approved posts ───────────────────────────────────────────
@@ -258,13 +262,6 @@ export default function Dashboard() {
     }
   };
 
-  // Merged article list: scraped articles first, then custom, then static seed list deduped
-  const allArticles = (() => {
-    const seen = new Set(scrapedArticles.map(a => a.url));
-    const staticFallback = ALL_ARTICLES.filter(a => !seen.has(a.url));
-    const customFiltered = customArticles.filter(a => !seen.has(a.url) && !ALL_ARTICLES.some(s => s.url === a.url));
-    return [...scrapedArticles, ...customFiltered, ...staticFallback];
-  })();
 
   // ── Add custom article to library ────────────
   const addCustomArticle = () => {
@@ -438,7 +435,7 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand }),
         });
         postData = await r.json();
         if (postData?.error) {
@@ -736,6 +733,10 @@ export default function Dashboard() {
     try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(twitterHooks)); } catch {}
   }, [twitterHooks]);
 
+  useEffect(() => {
+    try { localStorage.setItem('social-studio-brand', brand); } catch {}
+  }, [brand]);
+
   // ── Calendar label — uses article category from generated schedule if available ──
   const calendarLabel = (slot) => {
     const schedSlot = schedule?.find(s => s.id === slot.id);
@@ -747,14 +748,34 @@ export default function Dashboard() {
   // ── Sorted slot list for display ─────────────
   const sortedCustomSlots = [...customSlots].sort((a, b) => (a.date+a.time).localeCompare(b.date+b.time));
 
+  // ── Brand tokens (switches on toggle) ────────
+  const isRG = brand === 'reigrove';
+  const P    = isRG ? '#57823C' : BLUE;       // primary color
+  const PBG  = isRG ? '#EAF0E8' : BLUE_BG;   // primary light bg
+  const PBORDER = isRG ? '#C8E0B8' : BORDER;  // primary border tint
+  const PAGE_BG  = isRG ? '#F5F7F5' : BG;
+  const pBtn = { padding:'9px 20px', borderRadius:8, border:'none', background:P, color:'#fff', fontWeight:600, fontSize:14, cursor:'pointer' };
+
+  // ── Brand-aware article sources ───────────────
+  const ACTIVE_CATEGORIES = isRG ? RG_CATEGORIES : CATEGORIES;
+  const ACTIVE_ALL_ARTICLES = isRG ? RG_ALL_ARTICLES : ALL_ARTICLES;
+  // For REI Grove, scraped articles are not applicable — use seed + custom only
+  const activeScrapped = isRG ? [] : scrapedArticles;
+  const allArticles = (() => {
+    const seen = new Set(activeScrapped.map(a => a.url));
+    const staticFallback = ACTIVE_ALL_ARTICLES.filter(a => !seen.has(a.url));
+    const customFiltered = customArticles.filter(a => !seen.has(a.url) && !ACTIVE_ALL_ARTICLES.some(s => s.url === a.url));
+    return [...activeScrapped, ...customFiltered, ...staticFallback];
+  })();
+
   return (
-    <div style={{ minHeight: '100vh', background: BG, fontFamily: "'Inter',-apple-system,sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: PAGE_BG, fontFamily: "'Inter',-apple-system,sans-serif" }}>
 
       {/* ── Header ─────────────────────────────── */}
       <header style={{ background:'#fff', borderBottom:`1px solid ${BORDER}`, padding:'0 28px',
         display:'flex', alignItems:'center', height:58, position:'sticky', top:0, zIndex:100, gap:12 }}>
         <Logo />
-        <span style={{ fontWeight:700, fontSize:15, color:TEXT }}>Innago Social</span>
+        <span style={{ fontWeight:700, fontSize:15, color:TEXT }}>Social Studio</span>
 
         <nav style={{ display:'flex', gap:2, marginLeft:32 }}>
           {[
@@ -762,16 +783,31 @@ export default function Dashboard() {
             ['review', `Review${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
             ['blotato', 'Settings'],
           ].map(([t, label]) => (
-            <TabBtn key={t} active={tab===t} onClick={() => { setTab(t); setClearPostsConfirm(false); }}>{label}</TabBtn>
+            <TabBtn key={t} active={tab===t} onClick={() => { setTab(t); setClearPostsConfirm(false); }} color={P}>{label}</TabBtn>
           ))}
         </nav>
 
         <div style={{ marginLeft:'auto', display:'flex', gap:10, alignItems:'center' }}>
+          {/* Brand toggle */}
+          <div style={{ display:'flex', alignItems:'center', background:'#f1f3f5', borderRadius:999, padding:3, gap:2, border:`1px solid ${BORDER}` }}>
+            <button onClick={()=>setBrand('innago')}
+              style={{ padding:'5px 14px', borderRadius:999, border:'none', cursor:'pointer', fontWeight:600, fontSize:12, transition:'all 0.15s',
+                background: !isRG ? BLUE : 'transparent',
+                color: !isRG ? '#fff' : MUTED }}>
+              Innago
+            </button>
+            <button onClick={()=>setBrand('reigrove')}
+              style={{ padding:'5px 14px', borderRadius:999, border:'none', cursor:'pointer', fontWeight:600, fontSize:12, transition:'all 0.15s',
+                background: isRG ? '#57823C' : 'transparent',
+                color: isRG ? '#fff' : MUTED }}>
+              REI Grove
+            </button>
+          </div>
           {tab==='review' && doneCount > 0 && (
             <>
               <button onClick={exportCSV} style={outlineBtn}>Export CSV</button>
               {blotatoReady && !autoSchedule && (
-                <button onClick={scheduleAll} style={{ ...outlineBtn, color:BLUE, borderColor:BLUE }}>
+                <button onClick={scheduleAll} style={{ ...outlineBtn, color:P, borderColor:P }}>
                   Schedule All to Blotato
                 </button>
               )}
@@ -812,9 +848,9 @@ export default function Dashboard() {
                   {['list','calendar'].map(v=>(
                     <button key={v} onClick={()=>setScheduleView(v)}
                       style={{ padding:'5px 12px', borderRadius:6, cursor:'pointer', fontSize:12,
-                        border:`1px solid ${scheduleView===v?BLUE:BORDER}`,
-                        background:scheduleView===v?BLUE_BG:'#fff',
-                        color:scheduleView===v?BLUE:MUTED, fontWeight:scheduleView===v?600:400 }}>
+                        border:`1px solid ${scheduleView===v?P:BORDER}`,
+                        background:scheduleView===v?PBG:'#fff',
+                        color:scheduleView===v?P:MUTED, fontWeight:scheduleView===v?600:400 }}>
                       {v==='list'?'List':'Calendar'}
                     </button>
                   ))}
@@ -1027,14 +1063,27 @@ export default function Dashboard() {
             </div>
 
             {/* ── Article Library (collapsible panel) ── */}
-            <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
+            <div style={{ background:'#fff', border:`1px solid ${isRG ? '#C8E0B8' : BORDER}`, borderRadius:12, overflow:'hidden',
+              boxShadow: isRG ? `0 0 0 2px ${PBG}` : 'none' }}>
+              {/* Branded library header bar */}
+              <div style={{ background: isRG ? 'linear-gradient(135deg,#26463D,#1E4D37)' : BLUE, padding:'8px 18px',
+                display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:11, fontWeight:700, color:'#fff', letterSpacing:'0.07em', textTransform:'uppercase', opacity:0.85 }}>
+                  {isRG ? '🌿 REI Grove' : '🏠 Innago'} Article Library
+                </span>
+                <span style={{ fontSize:11, color:'rgba(255,255,255,0.65)', marginLeft:'auto' }}>
+                  {allArticles.length} articles
+                </span>
+              </div>
               {/* Header row */}
               <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 18px', flexWrap:'wrap' }}>
-                <span style={{ fontSize:14, fontWeight:600, color:TEXT }}>Article Library</span>
+                <span style={{ fontSize:14, fontWeight:600, color:TEXT }}>
+                  {isRG ? 'REI Grove Content' : 'Innago Blog'}
+                </span>
                 <span style={{ fontSize:13, color:MUTED }}>
-                  {scrapedArticles.length > 0
-                    ? `${allArticles.length} articles (${scrapedArticles.length} live + ${ALL_ARTICLES.length - (allArticles.length - scrapedArticles.length)} seed)`
-                    : `${ALL_ARTICLES.length} seed articles`}
+                  {activeScrapped.length > 0
+                    ? `${allArticles.length} articles (${activeScrapped.length} live + ${ACTIVE_ALL_ARTICLES.length - (allArticles.length - activeScrapped.length)} seed)`
+                    : `${ACTIVE_ALL_ARTICLES.length} seed articles`}
                 </span>
                 {/* Used/remaining cycle counter */}
                 {(() => {
@@ -1084,7 +1133,7 @@ export default function Dashboard() {
                     </button>
                   )}
                   <button onClick={refreshArticles} disabled={isRefreshing}
-                    style={{ ...outlineBtn, color:BLUE, borderColor:BLUE, opacity:isRefreshing?0.6:1, fontSize:12, padding:'5px 12px' }}>
+                    style={{ ...outlineBtn, color:P, borderColor:P, opacity:isRefreshing?0.6:1, fontSize:12, padding:'5px 12px' }}>
                     {isRefreshing ? 'Scraping…' : '↻ Refresh Articles'}
                   </button>
                 </div>
@@ -1094,7 +1143,7 @@ export default function Dashboard() {
                 <div style={{ borderTop:`1px solid ${BORDER}`, padding:'12px 18px 16px' }}>
                   {/* Add article form */}
                   <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:14, padding:'10px 14px',
-                    background:BLUE_BG, borderRadius:8, border:`1px solid ${BORDER}` }}>
+                    background:PBG, borderRadius:8, border:`1px solid ${PBORDER}` }}>
                     <input
                       type="url"
                       placeholder="https://innago.com/your-article/"
@@ -1108,20 +1157,20 @@ export default function Dashboard() {
                       onChange={e => setNewArticleCategory(e.target.value)}
                       style={{ ...input, width:'auto', fontSize:13, padding:'7px 10px', flexShrink:0 }}
                     >
-                      {Object.keys(CATEGORIES).map(cat => (
+                      {Object.keys(ACTIVE_CATEGORIES).map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
                     <button onClick={addCustomArticle}
-                      style={{ ...primaryBtn, fontSize:13, padding:'7px 18px', flexShrink:0 }}>
+                      style={{ ...pBtn, fontSize:13, padding:'7px 18px', flexShrink:0 }}>
                       Add
                     </button>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                    {Object.entries(CATEGORIES).map(([cat, urls]) => {
+                    {Object.entries(ACTIVE_CATEGORIES).map(([cat, urls]) => {
                       const catArticles = allArticles.filter(a => a.category === cat);
                       const displayArticles = catArticles.length > 0 ? catArticles : urls.map(url => {
-                        const slug = url.replace(/^https?:\/\/innago\.com\//, '').replace(/\/$/, '');
+                        const slug = url.replace(/^https?:\/\/[^/]+\//, '').replace(/\/$/, '');
                         return { url, category: cat, displayTitle: slug.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) };
                       });
                       const isOpen = openCategory === cat;
@@ -1129,10 +1178,10 @@ export default function Dashboard() {
                         <div key={cat} style={{ borderRadius:8, border:`1px solid ${BORDER}`, overflow:'hidden' }}>
                           <button onClick={() => setOpenCategory(isOpen ? null : cat)}
                             style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
-                              padding:'9px 14px', background:isOpen?BLUE_BG:'#fff', border:'none', cursor:'pointer',
-                              fontSize:13, fontWeight:isOpen?600:400, color:isOpen?BLUE:TEXT }}>
+                              padding:'9px 14px', background:isOpen?PBG:'#fff', border:'none', cursor:'pointer',
+                              fontSize:13, fontWeight:isOpen?600:400, color:isOpen?P:TEXT }}>
                             <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-                              <span style={{ width:7, height:7, borderRadius:'50%', background:isOpen?BLUE:MUTED, display:'inline-block', flexShrink:0 }} />
+                              <span style={{ width:7, height:7, borderRadius:'50%', background:isOpen?P:MUTED, display:'inline-block', flexShrink:0 }} />
                               {cat}
                             </span>
                             <span style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -1288,7 +1337,7 @@ export default function Dashboard() {
                 <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
                   <button onClick={()=>{ addRecurring(); if (specificUrls.some(u=>u.trim())) addSpecificSlots(); }}
                     disabled={!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length}
-                    style={{ ...primaryBtn,
+                    style={{ ...pBtn,
                       opacity:(!recurForm.startDate||!recurForm.endDate||!recurForm.days.length||!recurForm.platforms.length)?0.5:1 }}>
                     Add to Schedule
                   </button>
@@ -2068,11 +2117,11 @@ function Logo() {
   );
 }
 
-function TabBtn({ active, onClick, children }) {
+function TabBtn({ active, onClick, children, color = BLUE }) {
   return (
     <button onClick={onClick} style={{ padding:'6px 16px', borderRadius:6, border:'none',
       cursor:'pointer', fontWeight:active?600:400, fontSize:14,
-      background:active?BG:'transparent', color:active?BLUE:MUTED }}>
+      background:active?BG:'transparent', color:active?color:MUTED }}>
       {children}
     </button>
   );

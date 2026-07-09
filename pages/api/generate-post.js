@@ -17,8 +17,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
-// ── Shared brand voice rules ──────────────────────────────────
-const BRAND_RULES = `
+// ── Brand voice rules ─────────────────────────────────────────
+const INNAGO_BRAND_RULES = `
 VOICE: Conversational and direct, like a knowledgeable peer who has done this a thousand times. Never corporate, never fluffy. Short sentences. No jargon.
 
 PURPOSE: Position Innago as the knowledgeable authority in the rental property industry. The voice is someone who has watched thousands of landlords navigate this and knows where the costly mistakes hide. Not a summarizer — a peer with the experience to know why this matters.
@@ -46,15 +46,57 @@ NEVER USE in any post:
 - Hashtags or emojis
 - Exclamation points`;
 
-// ── Multi-platform system prompt ──────────────────────────────
-const SYSTEM_PROMPT = `You write platform-specific social media posts for Innago, a free property management platform for independent landlords.
-${BRAND_RULES}
+const RG_BRAND_RULES = `
+VOICE: Grounded, investor-focused, and practical. Speak like an experienced real estate investor sharing what actually works — not a guru, not a hype machine. Short sentences. No jargon.
+
+PURPOSE: Position REI Grove as the trusted resource for independent real estate investors — from beginners running their first deal analysis to experienced landlords scaling a portfolio. The voice knows the numbers, has seen the mistakes, and cuts straight to what matters.
+
+HOOK PATTERNS (use one per post, vary across platforms):
+1. Investor reality check: "Most investors run the numbers wrong on X. Here's the correct way."
+2. Hidden cost/risk: "The detail most buyers miss on X costs them Y at closing."
+3. Strategy insight: Reveal what experienced investors do differently on a specific decision.
+4. Market context: Give a data point or trend that changes how an investor should act.
+5. Deal lens: Frame the post around what the numbers actually say, not theory.
+
+COMPLETE STORY RULE: Give the full picture in plain language. The article handles the depth.
+CORRECT: "Cash-on-cash return tells you what your actual cash is doing. Cap rate tells you what the property would do unleveraged. Using one when you mean the other leads to bad decisions."
+WRONG: "Most investors confuse these two metrics. The difference could cost you."
+
+NEVER USE in any post:
+- Rhetorical questions (no "Did you know...?", "Are you making this mistake...?")
+- Em dashes or dashes as sentence connectors
+- "Not only... but also" and variants
+- "Whether you're X or Y" setups
+- "From X to Y" constructions
+- Paired adjective stacking ("clear, actionable")
+- Words: crucial, essential, vital, navigate, landscape, leverage, streamline, dive into, delve, game-changer, supercharge
+- Mentioning REI Grove by name in the post body
+- Hashtags or emojis
+- Exclamation points`;
+
+// ── Multi-platform system prompts ─────────────────────────────
+const INNAGO_SYSTEM_PROMPT = `You write platform-specific social media posts for Innago, a free property management platform for independent landlords.
+${INNAGO_BRAND_RULES}
 
 PLATFORM-SPECIFIC RULES:
   twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
   linkedin:  1-3 sentences before the URL. Professional authority voice. B2B landlord audience. Can include more context than other platforms.
   facebook:  1-2 sentences before the URL. Conversational and warm. Community feel. Slightly less formal than LinkedIn.
   instagram: 1-2 sentences. Visual-first hook — the opening words must grab immediately. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Read more at innago.com/blog" on its own line. Instagram does not support clickable links in captions.
+
+Each platform's post must be genuinely different — different hook, different angle, different length. Not the same sentence reworded.
+
+OUTPUT FORMAT: Return ONLY valid JSON with exactly these 4 keys. No explanation, no markdown fences:
+{"twitter":"<post text including bare URL at end>","linkedin":"<post text including bare URL at end>","facebook":"<post text including bare URL at end>","instagram":"<caption text ending with Link in bio. — NO URL>"}`;
+
+const RG_SYSTEM_PROMPT = `You write platform-specific social media posts for REI Grove, a real estate investor education and community platform.
+${RG_BRAND_RULES}
+
+PLATFORM-SPECIFIC RULES:
+  twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
+  linkedin:  1-3 sentences before the URL. Investor-focused authority voice. Audience: independent real estate investors, landlords scaling portfolios. More context is fine here.
+  facebook:  1-2 sentences before the URL. Conversational and grounded. Community feel. Slightly less formal than LinkedIn.
+  instagram: 1-2 sentences. Visual-first hook — opening words must grab immediately. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Read more at reigrove.com" on its own line. Instagram does not support clickable links in captions.
 
 Each platform's post must be genuinely different — different hook, different angle, different length. Not the same sentence reworded.
 
@@ -230,10 +272,15 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { url, displayTitle, date, boostedTopic, recentTwitterHooks } = req.body;
+  const { url, displayTitle, date, boostedTopic, recentTwitterHooks, brand } = req.body;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bitlyKey = process.env.BITLY_API_KEY;
   if (!url) return res.status(400).json({ error: 'url is required' });
+
+  const isRG = brand === 'reigrove';
+  const SYSTEM_PROMPT = isRG ? RG_SYSTEM_PROMPT : INNAGO_SYSTEM_PROMPT;
+  const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
+  const brandLabel = isRG ? 'REI Grove' : 'Innago';
 
   // Fetch article metadata
   const meta = await fetchArticleMeta(url);
@@ -246,16 +293,16 @@ export default async function handler(req, res) {
     .filter(h => new Date(h.date) >= twoWeeksAgo)
     .map(h => h.hook);
 
-  const twitterHookRule = `\nTWITTER HOOK VARIETY RULE: Do NOT start the Twitter post with any of these openings used in the past 14 days:\n${recentHooks.length > 0 ? recentHooks.map(h => `- "${h}"`).join('\n') : '(none yet)'}\nNever start more than 1 post per 14-day period with "most landlords". Vary the hook pattern every post.`;
+  const twitterHookRule = `\nTWITTER HOOK VARIETY RULE: Do NOT start the Twitter post with any of these openings used in the past 14 days:\n${recentHooks.length > 0 ? recentHooks.map(h => `- "${h}"`).join('\n') : '(none yet)'}\nNever start more than 1 post per 14-day period with "most ${isRG ? 'investors' : 'landlords'}". Vary the hook pattern every post.`;
 
-  const userPrompt = `Generate 4 platform-specific social media posts for this Innago article:
+  const userPrompt = `Generate 4 platform-specific social media posts for this ${brandLabel} article:
 
 Title: ${title}
 URL: ${url}
 Summary: ${summary}
 
 Include the URL exactly (${url}) at the end of twitter, linkedin, and facebook posts.
-Instagram caption must NOT include the URL — end with "Link in bio." instead.
+Instagram caption must NOT include the URL — end with "${igFooter}" instead.
 Only reference data or stats from 2025 or 2026. Ignore older figures.
 Do not write about password resets, account creation, or login pages.${boostedTopic ? `\n\nThis is part of a focused push on "${boostedTopic}" — frame each post accordingly.` : ''}
 ${twitterHookRule}
@@ -307,9 +354,10 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
   let instagramCaption = posts.instagram || posts.linkedin || '';
   // Strip any URL that Claude may have included anyway
   instagramCaption = instagramCaption.replace(/https?:\/\/\S+/g, '').trim();
-  // Ensure it ends with "Link in bio."
-  if (!instagramCaption.toLowerCase().includes('innago.com/blog')) {
-    instagramCaption = instagramCaption + '\n\nRead more at innago.com/blog';
+  // Ensure it ends with the brand-specific footer
+  const igFooterLower = igFooter.toLowerCase();
+  if (!instagramCaption.toLowerCase().includes(igFooterLower.split('/').pop() || igFooterLower)) {
+    instagramCaption = instagramCaption + `\n\n${igFooter}`;
   }
   const post_instagram = instagramCaption;
 
