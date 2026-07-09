@@ -47,20 +47,28 @@ NEVER USE in any post:
 - Exclamation points`;
 
 const RG_BRAND_RULES = `
-VOICE: Grounded, investor-focused, and practical. Speak like an experienced real estate investor sharing what actually works — not a guru, not a hype machine. Short sentences. No jargon.
+VOICE: Warm, credible, and practical — like a knowledgeable neighbor who has been investing for years and genuinely wants to help you grow. Not a hype machine, not a guru. Encouraging to beginners, respectful of experienced investors. Short sentences. Plain language. No jargon.
 
-PURPOSE: Position REI Grove as the trusted resource for independent real estate investors — from beginners running their first deal analysis to experienced landlords scaling a portfolio. The voice knows the numbers, has seen the mistakes, and cuts straight to what matters.
+PURPOSE: REI Grove is a resource hub, education center, and community for real estate investors. The tagline is "Grow together." Posts should make investors feel supported, more informed, and motivated to take their next step — whether that's running their first deal analysis, understanding a tax strategy, or connecting with the community.
+
+CONTENT TYPES — match tone to content:
+- The Breakdown articles: news and market analysis — give the key insight and why it matters to investors right now.
+- Podcast episodes: tease the most useful takeaway from the conversation — not "we interviewed X" but what the listener will walk away knowing.
+- Webinars: lead with the specific problem being solved, not the format.
+- Spreadsheets/Calculators/Checklists: lead with the job the tool does — what decision it helps you make or what task it handles.
+- eBooks/Guides: lead with the knowledge gap being filled.
+- Data Reports: lead with the most surprising or actionable finding.
 
 HOOK PATTERNS (use one per post, vary across platforms):
-1. Investor reality check: "Most investors run the numbers wrong on X. Here's the correct way."
-2. Hidden cost/risk: "The detail most buyers miss on X costs them Y at closing."
-3. Strategy insight: Reveal what experienced investors do differently on a specific decision.
-4. Market context: Give a data point or trend that changes how an investor should act.
-5. Deal lens: Frame the post around what the numbers actually say, not theory.
+1. Community framing: "Most investors figure this out the hard way. Here's a shorter path."
+2. Practical insight: Name a specific mistake, gap, or decision point and explain the better approach.
+3. Market context: A data point or trend that should change how investors are thinking right now.
+4. Tool value: Show what knowing this number or having this resource actually changes.
+5. Growth moment: Frame the content as a step forward — something that takes you from where you are to where you want to be.
 
-COMPLETE STORY RULE: Give the full picture in plain language. The article handles the depth.
-CORRECT: "Cash-on-cash return tells you what your actual cash is doing. Cap rate tells you what the property would do unleveraged. Using one when you mean the other leads to bad decisions."
-WRONG: "Most investors confuse these two metrics. The difference could cost you."
+COMPLETE STORY RULE: Give the full picture in plain language. The resource handles the depth.
+CORRECT: "A pro forma shows you what a property's cash flow looks like five years out — before you buy. Most investors skip this step and get surprised by costs they could have seen coming."
+WRONG: "This spreadsheet could change how you invest. Download it to find out why."
 
 NEVER USE in any post:
 - Rhetorical questions (no "Did you know...?", "Are you making this mistake...?")
@@ -69,7 +77,7 @@ NEVER USE in any post:
 - "Whether you're X or Y" setups
 - "From X to Y" constructions
 - Paired adjective stacking ("clear, actionable")
-- Words: crucial, essential, vital, navigate, landscape, leverage, streamline, dive into, delve, game-changer, supercharge
+- Words: crucial, essential, vital, navigate, landscape, leverage, streamline, dive into, delve, game-changer, supercharge, unlock
 - Mentioning REI Grove by name in the post body
 - Hashtags or emojis
 - Exclamation points`;
