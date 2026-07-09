@@ -280,7 +280,7 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { url, displayTitle, date, boostedTopic, recentTwitterHooks, brand } = req.body;
+  const { url, displayTitle, description: providedDescription, date, boostedTopic, recentTwitterHooks, brand } = req.body;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bitlyKey = process.env.BITLY_API_KEY;
   if (!url) return res.status(400).json({ error: 'url is required' });
@@ -290,10 +290,10 @@ export default async function handler(req, res) {
   const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
   const brandLabel = isRG ? 'REI Grove' : 'Innago';
 
-  // Fetch article metadata
-  const meta = await fetchArticleMeta(url);
+  // Fetch article metadata — skip scrape if a description was provided (e.g. REI Grove assets)
+  const meta = providedDescription ? null : await fetchArticleMeta(url);
   const title = meta?.title || displayTitle || url;
-  const summary = meta?.summary || '';
+  const summary = providedDescription || meta?.summary || '';
   const image_url = meta?.image_url || '';
 
   const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);

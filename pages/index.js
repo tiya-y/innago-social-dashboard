@@ -435,7 +435,7 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand }),
         });
         postData = await r.json();
         if (postData?.error) {
