@@ -188,6 +188,7 @@ export default function Dashboard() {
   const [editDraft, setEditDraft] = useState('');
   const [copiedKey, setCopiedKey] = useState(null);
   const [regeneratingId, setRegeneratingId] = useState(null);
+  const [swapArticleSlotId, setSwapArticleSlotId] = useState(null);
   const abortRef = useRef(false);
 
   // ── Custom articles (manually added to library) ──────────────
@@ -578,7 +579,7 @@ export default function Dashboard() {
       const r = await fetch('/api/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks }),
+        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand }),
       });
       const postData = await r.json();
       setPosts(p => ({ ...p, [slot.id]: postData }));
@@ -592,6 +593,37 @@ export default function Dashboard() {
         });
       }
     } catch { /* keep existing */ } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  // ── Swap article on a slot ───────────────────
+  const swapArticleAndRegenerate = async (slotId, newArticle) => {
+    setSwapArticleSlotId(null);
+    setSchedule(prev => prev.map(s => s.id === slotId ? { ...s, article: newArticle } : s));
+    // Wait one tick for schedule state to settle, then regenerate with the updated slot
+    const updatedSlot = schedule.find(s => s.id === slotId);
+    if (!updatedSlot) return;
+    const slotWithNewArticle = { ...updatedSlot, article: newArticle };
+    setRegeneratingId(slotId);
+    try {
+      const r = await fetch('/api/generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: newArticle.url, displayTitle: newArticle.displayTitle, description: newArticle.description || undefined, date: slotWithNewArticle.date, boostedTopic: slotWithNewArticle.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand }),
+      });
+      const postData = await r.json();
+      setPosts(p => ({ ...p, [slotId]: postData }));
+      setScheduleStatus(p => ({ ...p, [slotId]: undefined }));
+      if (postData?.post_twitter_x) {
+        const hook = postData.post_twitter_x.trim().split(/\s+/).slice(0, 5).join(' ').toLowerCase();
+        setTwitterHooks(prev => {
+          const next = [...prev, { hook, date: slotWithNewArticle.date }];
+          try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
+    } catch {} finally {
       setRegeneratingId(null);
     }
   };
@@ -1402,76 +1434,94 @@ export default function Dashboard() {
             </Card>
 
             <Card title="Account Mapping">
-              {!accounts ? (
-                <p style={{ fontSize:14, color:MUTED }}>Load your accounts first →</p>
-              ) : (
-                <>
-                  <p style={{ margin:'0 0 16px', fontSize:13, color:MUTED }}>
-                    Select which account + page to post to on each platform. Only platforms enabled per-slot will be scheduled.
-                  </p>
-                  {PLATFORMS_LIST.map(platform => {
-                    const items = accounts[platform]||[];
-                    const mapping = accountMapping[platform]||{};
-                    const color = PLATFORM_COLORS[platform];
-                    return (
-                      <div key={platform} style={{ marginBottom:18 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                          <PlatformDot color={color} />
-                          <span style={{ fontWeight:600, fontSize:14 }}>{PLATFORM_LABELS[platform]}</span>
-                          {items.length===0 && <span style={{ fontSize:12, color:MUTED }}>(not connected)</span>}
-                          {mapping.accountId && <span style={{ fontSize:12, color:GREEN }}>✓ mapped</span>}
-                        </div>
-                        {items.length>0 && (
-                          <>
-                            <select value={mapping.accountId}
-                              onChange={e=>{
-                                const acct=items.find(a=>a.accountId===e.target.value);
-                                setAccountMapping(p=>({...p,[platform]:{ accountId:e.target.value, pageId:acct?.pages?.[0]?.pageId||'' }}));
-                              }}
-                              style={{ ...input, marginBottom:(platform==='facebook'||platform==='linkedin')&&items.find(a=>a.accountId===mapping.accountId)?.pages?.length>0?6:0 }}>
-                              <option value="">— select account —</option>
-                              {items.map(a=><option key={a.accountId} value={a.accountId}>{a.fullname} (@{a.username})</option>)}
-                            </select>
-                            {(platform==='facebook'||platform==='linkedin') && (() => {
-                              const acct=items.find(a=>a.accountId===mapping.accountId);
-                              const pages=acct?.pages||[];
-                              if (!pages.length && mapping.accountId) return (
-                                <p style={{ fontSize:12, color:YELLOW, margin:'4px 0 0', padding:'6px 10px',
-                                  background:'#fefce8', borderRadius:6, border:'1px solid #fde68a' }}>
-                                  {platform==='facebook'
-                                    ? '⚠ No Facebook Page found. Connect the Innago Page in Blotato → Settings → Social Accounts, then reload.'
-                                    : '⚠ No LinkedIn Page found. Connect the Innago Company Page in Blotato → Settings → Social Accounts, then reload.'}
-                                </p>
-                              );
-                              if (!pages.length) return null;
-                              return (
-                                <>
-                                  <select value={mapping.pageId}
-                                    onChange={e=>setAccountMapping(p=>({...p,[platform]:{...p[platform],pageId:e.target.value}}))}
-                                    style={input}>
-                                    <option value="">— select page —</option>
-                                    {pages.map(pg=><option key={pg.pageId} value={pg.pageId}>{pg.name}</option>)}
-                                  </select>
-                                  {!mapping.pageId && (
-                                    <p style={{ fontSize:12, color:YELLOW, margin:'4px 0 0' }}>
-                                      {platform==='facebook' ? '⚠ Facebook requires a Page — personal profiles cannot receive posts via API.' : '⚠ Select a Company Page to post as Innago.'}
-                                    </p>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {hasValidMapping() && (
-                    <div style={{ padding:'10px 14px', background:'#f0fdf4', borderRadius:8,
-                      border:'1px solid #bbf7d0', fontSize:13, color:GREEN, marginTop:4 }}>
-                      ✓ Ready to schedule. Posts will go out at the time set on each slot.
+              <p style={{ margin:'0 0 4px', fontSize:13, color:MUTED }}>
+                Paste your Blotato Account ID and Page ID for each platform. Find these in Blotato → Settings → Social Accounts.
+              </p>
+              <p style={{ margin:'0 0 16px', fontSize:12, color:MUTED }}>
+                LinkedIn and Facebook require a <strong>Page ID</strong> to post as a company page.
+              </p>
+              {PLATFORMS_LIST.map(platform => {
+                const items = accounts?.[platform] || [];
+                const mapping = accountMapping[platform] || {};
+                const color = PLATFORM_COLORS[platform];
+                const needsPage = platform === 'facebook' || platform === 'linkedin';
+                return (
+                  <div key={platform} style={{ marginBottom:20, padding:'14px 16px', borderRadius:10,
+                    border:`1px solid ${mapping.accountId ? BORDER : BORDER}`, background:'#fafafa' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                      <PlatformDot color={color} />
+                      <span style={{ fontWeight:600, fontSize:14 }}>{PLATFORM_LABELS[platform]}</span>
+                      {mapping.accountId && (!needsPage || mapping.pageId) && (
+                        <span style={{ fontSize:11, color:GREEN, background:'#f0fdf4', border:'1px solid #bbf7d0',
+                          borderRadius:999, padding:'1px 8px', marginLeft:'auto' }}>✓ ready</span>
+                      )}
+                      {mapping.accountId && needsPage && !mapping.pageId && (
+                        <span style={{ fontSize:11, color:YELLOW, background:'#fefce8', border:'1px solid #fde68a',
+                          borderRadius:999, padding:'1px 8px', marginLeft:'auto' }}>needs page ID</span>
+                      )}
                     </div>
-                  )}
-                </>
+
+                    {/* Dropdown if accounts were loaded via Connect button */}
+                    {items.length > 0 && (
+                      <select value={mapping.accountId}
+                        onChange={e => {
+                          const acct = items.find(a => a.accountId === e.target.value);
+                          setAccountMapping(p => ({ ...p, [platform]: { accountId: e.target.value, pageId: acct?.pages?.[0]?.pageId || '' } }));
+                        }}
+                        style={{ ...input, marginBottom:8, fontSize:13 }}>
+                        <option value="">— select account —</option>
+                        {items.map(a => <option key={a.accountId} value={a.accountId}>{a.fullname} (@{a.username})</option>)}
+                      </select>
+                    )}
+
+                    {/* Manual account ID input */}
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      <div>
+                        <label style={{ fontSize:11, fontWeight:600, color:MUTED, textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:3 }}>
+                          Account ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 98432"
+                          value={mapping.accountId || ''}
+                          onChange={e => setAccountMapping(p => ({ ...p, [platform]: { ...p[platform], accountId: e.target.value.trim() } }))}
+                          style={{ ...input, fontSize:13, fontFamily:'monospace' }}
+                        />
+                      </div>
+                      {needsPage && (
+                        <div>
+                          <label style={{ fontSize:11, fontWeight:600, color:MUTED, textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:3 }}>
+                            Page ID {platform === 'facebook' ? '(required)' : '(company page)'}
+                          </label>
+                          {/* Page dropdown if loaded */}
+                          {items.length > 0 && items.find(a => a.accountId === mapping.accountId)?.pages?.length > 0 && (
+                            <select value={mapping.pageId}
+                              onChange={e => setAccountMapping(p => ({ ...p, [platform]: { ...p[platform], pageId: e.target.value } }))}
+                              style={{ ...input, marginBottom:6, fontSize:13 }}>
+                              <option value="">— select page —</option>
+                              {(items.find(a => a.accountId === mapping.accountId)?.pages || []).map(pg => (
+                                <option key={pg.pageId} value={pg.pageId}>{pg.name}</option>
+                              ))}
+                            </select>
+                          )}
+                          <input
+                            type="text"
+                            placeholder="e.g. 987654321"
+                            value={mapping.pageId || ''}
+                            onChange={e => setAccountMapping(p => ({ ...p, [platform]: { ...p[platform], pageId: e.target.value.trim() } }))}
+                            style={{ ...input, fontSize:13, fontFamily:'monospace' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {hasValidMapping() && (
+                <div style={{ padding:'10px 14px', background:'#f0fdf4', borderRadius:8,
+                  border:'1px solid #bbf7d0', fontSize:13, color:GREEN }}>
+                  ✓ Ready to schedule. Posts will go out at the time set on each slot.
+                </div>
               )}
             </Card>
 
@@ -1832,6 +1882,15 @@ export default function Dashboard() {
                                 style={{ fontSize:12, color:BLUE, textDecoration:'none' }}>
                                 {p?.title || slot.article?.displayTitle}
                               </a>
+                              <button
+                                onClick={() => setSwapArticleSlotId(swapArticleSlotId === slot.id ? null : slot.id)}
+                                title="Pick a different article to regenerate from"
+                                style={{ background:'none', border:'none', cursor:'pointer', fontSize:11,
+                                  color: swapArticleSlotId===slot.id ? P : MUTED,
+                                  padding:'1px 5px', borderRadius:5,
+                                  textDecoration:'underline', textDecorationStyle:'dotted' }}>
+                                ↩ swap link
+                              </button>
                               {allPlatformsApproved && (
                                 <span style={{ fontSize:11, background:'#f0fdf4', color:GREEN,
                                   padding:'2px 8px', borderRadius:10, fontWeight:600 }}>
@@ -1840,6 +1899,30 @@ export default function Dashboard() {
                               )}
                             </div>
                           </div>
+
+                          {/* Inline article swap picker */}
+                          {swapArticleSlotId === slot.id && (
+                            <div style={{ marginBottom:10, padding:'12px 14px', background:PBG,
+                              borderRadius:8, border:`1px solid ${PBORDER}` }}>
+                              <div style={{ fontSize:12, fontWeight:600, color:TEXT, marginBottom:8 }}>
+                                Pick a different article — post will regenerate automatically
+                              </div>
+                              <ArticlePicker
+                                value={slot.article?.url || ''}
+                                onChange={(url, article) => {
+                                  if (article) swapArticleAndRegenerate(slot.id, article);
+                                  else setSwapArticleSlotId(null);
+                                }}
+                                slotDate={slot.date}
+                                articles={allArticles}
+                              />
+                              <button onClick={() => setSwapArticleSlotId(null)}
+                                style={{ marginTop:8, background:'none', border:'none', cursor:'pointer',
+                                  fontSize:12, color:MUTED, textDecoration:'underline' }}>
+                                Cancel
+                              </button>
+                            </div>
+                          )}
 
                           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
                             {slotStatus && !slotStatus._loading && (
