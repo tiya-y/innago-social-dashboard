@@ -1435,14 +1435,29 @@ export default function Dashboard() {
                             {(platform==='facebook'||platform==='linkedin') && (() => {
                               const acct=items.find(a=>a.accountId===mapping.accountId);
                               const pages=acct?.pages||[];
+                              if (!pages.length && mapping.accountId) return (
+                                <p style={{ fontSize:12, color:YELLOW, margin:'4px 0 0', padding:'6px 10px',
+                                  background:'#fefce8', borderRadius:6, border:'1px solid #fde68a' }}>
+                                  {platform==='facebook'
+                                    ? '⚠ No Facebook Page found. Connect the Innago Page in Blotato → Settings → Social Accounts, then reload.'
+                                    : '⚠ No LinkedIn Page found. Connect the Innago Company Page in Blotato → Settings → Social Accounts, then reload.'}
+                                </p>
+                              );
                               if (!pages.length) return null;
                               return (
-                                <select value={mapping.pageId}
-                                  onChange={e=>setAccountMapping(p=>({...p,[platform]:{...p[platform],pageId:e.target.value}}))}
-                                  style={input}>
-                                  <option value="">— personal profile —</option>
-                                  {pages.map(pg=><option key={pg.pageId} value={pg.pageId}>{pg.name}</option>)}
-                                </select>
+                                <>
+                                  <select value={mapping.pageId}
+                                    onChange={e=>setAccountMapping(p=>({...p,[platform]:{...p[platform],pageId:e.target.value}}))}
+                                    style={input}>
+                                    <option value="">— select page —</option>
+                                    {pages.map(pg=><option key={pg.pageId} value={pg.pageId}>{pg.name}</option>)}
+                                  </select>
+                                  {!mapping.pageId && (
+                                    <p style={{ fontSize:12, color:YELLOW, margin:'4px 0 0' }}>
+                                      {platform==='facebook' ? '⚠ Facebook requires a Page — personal profiles cannot receive posts via API.' : '⚠ Select a Company Page to post as Innago.'}
+                                    </p>
+                                  )}
+                                </>
                               );
                             })()}
                           </>
