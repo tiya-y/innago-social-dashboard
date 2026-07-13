@@ -562,6 +562,26 @@ export default function Dashboard() {
     }
   };
 
+  // ── Unschedule all Blotato posts for a slot, then run callback ──
+  const unscheduleSlotFromBlotato = async (slotId) => {
+    const status = scheduleStatus[slotId];
+    if (!status) return;
+    const scheduled = Object.entries(status).filter(([, r]) => r?.ok && r?.postId);
+    await Promise.all(scheduled.map(async ([platform, platformStatus]) => {
+      try {
+        await fetch('/api/blotato/delete-post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            postId: platformStatus.postId,
+            scheduledTime: platformStatus.scheduledTime,
+            platform,
+          }),
+        });
+      } catch {}
+    }));
+  };
+
   // ── Edit ─────────────────────────────────────
   const startEdit = (slotId, field) => { setEditingKey(`${slotId}::${field}`); setEditDraft(posts[slotId]?.[field] || ''); };
   const saveEdit = (slotId, field) => { setPosts(p => ({ ...p, [slotId]: { ...p[slotId], [field]: editDraft } })); setEditingKey(null); };
@@ -863,7 +883,9 @@ export default function Dashboard() {
                   </button>
                 </>
               ) : (
-                <button onClick={()=>{
+                <button onClick={async ()=>{
+                  // Unschedule all slots from Blotato in parallel
+                  if (schedule) await Promise.all(schedule.map(s => unscheduleSlotFromBlotato(s.id)));
                   setSchedule(null); setPosts({}); setScheduleStatus({});
                   setClearPostsConfirm(false);
                   try { localStorage.removeItem('innago-schedule'); localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
@@ -2205,7 +2227,8 @@ export default function Dashboard() {
                               </button>
                             )}
                             <button
-                              onClick={()=>{
+                              onClick={async ()=>{
+                                await unscheduleSlotFromBlotato(slot.id);
                                 setSchedule(s=>s.filter(x=>x.id!==slot.id));
                                 setPosts(p=>{ const n={...p}; delete n[slot.id]; return n; });
                                 setScheduleStatus(s=>{ const n={...s}; delete n[slot.id]; return n; });
