@@ -204,6 +204,10 @@ export default function Dashboard() {
   const [imgFeedbackText, setImgFeedbackText] = useState('');
   const [imageFeedbackHistory, setImageFeedbackHistory] = useState([]);
 
+  // ── Library ──────────────────────────────────────────────────
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryExpandedId, setLibraryExpandedId] = useState(null);
+
   // ── Twitter hook variety tracking ───────────────────────────
   const [twitterHooks, setTwitterHooks] = useState([]);
 
@@ -835,8 +839,9 @@ export default function Dashboard() {
 
         <nav style={{ display:'flex', gap:2, marginLeft:32 }}>
           {[
-            ['config', `Schedule${customSlots.length > 0 ? ` (${customSlots.length})` : ''}`],
-            ['review', `Review${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
+            ['config', `New Post${customSlots.length > 0 ? ` (${customSlots.length})` : ''}`],
+            ['review', `Review Queue${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
+            ['library', `Library${Object.keys(approvedPosts).length > 0 ? ` (${Object.keys(approvedPosts).length})` : ''}`],
             ['blotato', 'Settings'],
           ].map(([t, label]) => (
             <TabBtn key={t} active={tab===t} onClick={() => { setTab(t); setClearPostsConfirm(false); }} color={P}>{label}</TabBtn>
@@ -1440,6 +1445,176 @@ export default function Dashboard() {
 
           </div>
         )}
+
+        {/* ══ LIBRARY TAB ══════════════════════════ */}
+        {tab==='library' && (() => {
+          // Build library rows from approvedPosts × schedule × posts
+          const rows = Object.entries(approvedPosts).map(([slotId, approval]) => {
+            const slot = schedule?.find(s => s.id === slotId);
+            const post = posts[slotId];
+            return { slotId, slot, post, approval };
+          }).filter(r => r.slot && r.post && !r.post.error);
+
+          const q = libraryQuery.toLowerCase();
+          const filtered = q
+            ? rows.filter(r =>
+                (r.slot.article?.displayTitle || '').toLowerCase().includes(q) ||
+                (r.slot.article?.category || '').toLowerCase().includes(q) ||
+                (r.slot.date || '').includes(q) ||
+                (r.post.post_linkedin || r.post.post || '').toLowerCase().includes(q)
+              )
+            : rows;
+
+          // CSV export
+          const exportLibraryCSV = () => {
+            const header = ['Date','Article','Category','Platforms','Approved At','LinkedIn','Twitter','Facebook','Instagram'];
+            const csvRows = filtered.map(r => [
+              r.slot.date,
+              r.post.title || r.slot.article?.displayTitle || '',
+              r.slot.article?.category || '',
+              (r.approval.platforms || []).join(' | '),
+              r.approval.approvedAt ? new Date(r.approval.approvedAt).toLocaleString() : '',
+              r.post.post_linkedin || '',
+              r.post.post_twitter_x || '',
+              r.post.post_facebook || '',
+              r.post.post_instagram || '',
+            ].map(v => `"${String(v).replace(/"/g,'""')}"`));
+            const csv = [header.join(','), ...csvRows.map(r => r.join(','))].join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            a.download = 'social-library.csv'; a.click();
+          };
+
+          return (
+            <div>
+              {/* Header row */}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+                <div>
+                  <h2 style={{ margin:0, fontSize:20, fontWeight:700, color:TEXT }}>Library</h2>
+                  <p style={{ margin:'4px 0 0', fontSize:13, color:MUTED }}>
+                    All approved posts · {filtered.length} total{q ? ` matching "${libraryQuery}"` : ''}
+                    {(() => {
+                      const thisMonth = filtered.filter(r => r.slot.date?.startsWith(today().slice(0,7))).length;
+                      return thisMonth > 0 ? ` · ${thisMonth} this month` : '';
+                    })()}
+                  </p>
+                </div>
+                <button onClick={exportLibraryCSV} style={{ ...outlineBtn, fontSize:13 }}>Export CSV</button>
+              </div>
+
+              {/* Search */}
+              <input
+                value={libraryQuery}
+                onChange={e => setLibraryQuery(e.target.value)}
+                placeholder="Search by article, category, date, or post text…"
+                style={{ ...input, marginBottom:16, maxWidth:420 }}
+              />
+
+              {/* Empty state */}
+              {filtered.length === 0 && (
+                <div style={{ textAlign:'center', padding:80, color:MUTED }}>
+                  <div style={{ fontSize:40, marginBottom:12 }}>📚</div>
+                  <p style={{ fontSize:15, fontWeight:600, color:TEXT, margin:'0 0 6px' }}>
+                    {q ? 'No posts match your search.' : 'Nothing in the library yet.'}
+                  </p>
+                  <p style={{ fontSize:13, margin:'0 0 18px' }}>
+                    {q ? 'Try a different search term.' : 'Approve posts in the Review Queue to add them here.'}
+                  </p>
+                  {!q && <button onClick={()=>setTab('review')} style={primaryBtn}>Go to Review Queue</button>}
+                </div>
+              )}
+
+              {/* Table */}
+              {filtered.length > 0 && (
+                <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
+                  {/* Table header */}
+                  <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 130px 140px 100px',
+                    background:'#F9FAFB', borderBottom:`1px solid ${BORDER}`,
+                    padding:'10px 16px', gap:12 }}>
+                    {['Date','Article','Category','Platforms',''].map(h => (
+                      <span key={h} style={{ fontSize:11, fontWeight:700, color:MUTED,
+                        textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</span>
+                    ))}
+                  </div>
+
+                  {/* Rows */}
+                  {filtered.map(({ slotId, slot, post, approval }) => {
+                    const isExpanded = libraryExpandedId === slotId;
+                    const approvedPlatforms = approval.platforms || [];
+                    return (
+                      <div key={slotId} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                        {/* Main row */}
+                        <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 130px 140px 100px',
+                          padding:'12px 16px', gap:12, alignItems:'center',
+                          background: isExpanded ? PBG : '#fff',
+                          cursor:'pointer' }}
+                          onClick={() => setLibraryExpandedId(isExpanded ? null : slotId)}>
+
+                          <span style={{ fontSize:13, color:MUTED }}>{slot.date}</span>
+
+                          <div style={{ overflow:'hidden' }}>
+                            <a href={slot.article?.url} target="_blank" rel="noreferrer"
+                              onClick={e=>e.stopPropagation()}
+                              style={{ fontSize:13, color:P, fontWeight:500, textDecoration:'none',
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block' }}>
+                              {post.title || slot.article?.displayTitle}
+                            </a>
+                            <span style={{ fontSize:11, color:MUTED }}>
+                              Approved {approval.approvedAt ? new Date(approval.approvedAt).toLocaleDateString() : ''}
+                            </span>
+                          </div>
+
+                          <span style={{ fontSize:12, color:MUTED }}>{slot.article?.category}</span>
+
+                          <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                            {approvedPlatforms.map(pl => (
+                              <span key={pl} style={{ fontSize:10, padding:'2px 6px', borderRadius:8, fontWeight:600,
+                                background: PLATFORM_COLORS[pl]+'18', color:PLATFORM_COLORS[pl] }}>
+                                {PLATFORM_LABELS[pl]}
+                              </span>
+                            ))}
+                          </div>
+
+                          <span style={{ fontSize:12, color:P, textAlign:'right' }}>
+                            {isExpanded ? '▲ Hide' : '▼ View'}
+                          </span>
+                        </div>
+
+                        {/* Expanded post content */}
+                        {isExpanded && (
+                          <div style={{ padding:'0 16px 16px', borderTop:`1px solid ${BORDER}` }}>
+                            {[
+                              ['LinkedIn', 'post_linkedin', 'linkedin'],
+                              ['Twitter/X', 'post_twitter_x', 'twitter'],
+                              ['Facebook', 'post_facebook', 'facebook'],
+                              ['Instagram', 'post_instagram', 'instagram'],
+                            ].filter(([,field]) => post[field]).map(([label, field, pl]) => (
+                              <div key={field} style={{ marginTop:14 }}>
+                                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                                  <span style={{ fontSize:11, fontWeight:700, color:PLATFORM_COLORS[pl],
+                                    textTransform:'uppercase', letterSpacing:'0.06em' }}>{label}</span>
+                                  <button onClick={()=>navigator.clipboard.writeText(post[field])}
+                                    style={{ background:'none', border:'none', cursor:'pointer',
+                                      fontSize:11, color:MUTED, textDecoration:'underline', padding:0 }}>
+                                    Copy
+                                  </button>
+                                </div>
+                                <p style={{ margin:0, fontSize:13, lineHeight:1.65, color:'#374151',
+                                  whiteSpace:'pre-wrap', background:'#F9FAFB', padding:'10px 14px',
+                                  borderRadius:8, border:`1px solid ${BORDER}` }}>
+                                  {post[field]}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ══ SETTINGS TAB ════════════════════════ */}
         {tab==='blotato' && (
