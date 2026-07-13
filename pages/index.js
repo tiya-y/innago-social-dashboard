@@ -844,10 +844,20 @@ export default function Dashboard() {
                 </button>
               )}
               {!clearPostsConfirm ? (
-                <button onClick={()=>setClearPostsConfirm(true)}
-                  style={{ ...outlineBtn, color:RED, borderColor:RED }}>
-                  Clear Posts
-                </button>
+                <>
+                  <button onClick={()=>{
+                    setPosts({});
+                    setScheduleStatus({});
+                    try { localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
+                  }}
+                    style={{ ...outlineBtn, color:RED, borderColor:RED }}>
+                    Clear All Generated Text
+                  </button>
+                  <button onClick={()=>setClearPostsConfirm(true)}
+                    style={{ ...outlineBtn, color:RED, borderColor:RED }}>
+                    Delete All Slots
+                  </button>
+                </>
               ) : (
                 <button onClick={()=>{
                   setSchedule(null); setPosts({}); setScheduleStatus({});
@@ -2179,7 +2189,17 @@ export default function Dashboard() {
                         )}
                         {/* Delete slot — bottom of card, clearly labelled */}
                         {!generating && (
-                          <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end' }}>
+                          <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid ${BORDER}`, display:'flex', justifyContent:'flex-end', gap:8 }}>
+                            {posts[slot.id] && (
+                              <button
+                                onClick={()=>{
+                                  setPosts(p=>{ const n={...p}; delete n[slot.id]; return n; });
+                                  setScheduleStatus(s=>{ const n={...s}; delete n[slot.id]; return n; });
+                                }}
+                                style={{ ...outlineBtn, fontSize:12, padding:'5px 12px', color:MUTED, borderColor:BORDER }}>
+                                Clear Generated Text
+                              </button>
+                            )}
                             <button
                               onClick={()=>{
                                 setSchedule(s=>s.filter(x=>x.id!==slot.id));
