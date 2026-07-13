@@ -864,43 +864,6 @@ export default function Dashboard() {
               REI Grove
             </button>
           </div>
-          {tab==='review' && doneCount > 0 && (
-            <>
-              <button onClick={exportCSV} style={outlineBtn}>Export CSV</button>
-              {blotatoReady && !autoSchedule && (
-                <button onClick={scheduleAll} style={{ ...outlineBtn, color:P, borderColor:P }}>
-                  Schedule All to Blotato
-                </button>
-              )}
-              {!clearPostsConfirm ? (
-                <>
-                  <button onClick={()=>{
-                    setPosts({});
-                    setScheduleStatus({});
-                    try { localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
-                  }}
-                    style={{ ...outlineBtn, color:RED, borderColor:RED }}>
-                    Clear All Generated Text
-                  </button>
-                  <button onClick={()=>setClearPostsConfirm(true)}
-                    style={{ ...outlineBtn, color:RED, borderColor:RED }}>
-                    Delete All Slots
-                  </button>
-                </>
-              ) : (
-                <button onClick={async ()=>{
-                  // Unschedule all slots from Blotato in parallel
-                  if (schedule) await Promise.all(schedule.map(s => unscheduleSlotFromBlotato(s.id)));
-                  setSchedule(null); setPosts({}); setScheduleStatus({});
-                  setClearPostsConfirm(false);
-                  try { localStorage.removeItem('innago-schedule'); localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
-                }}
-                  style={{ ...primaryBtn, background:RED }}>
-                  Are you sure? Click to confirm
-                </button>
-              )}
-            </>
-          )}
         </div>
       </header>
 
@@ -1826,24 +1789,52 @@ export default function Dashboard() {
                 {/* Summary strip */}
                 {!generating && doneCount>0 && (
                   <div style={{ display:'flex', gap:20, marginBottom:20, padding:'12px 18px',
-                    background:'#fff', border:`1px solid ${BORDER}`, borderRadius:10, flexWrap:'wrap' }}>
+                    background:'#fff', border:`1px solid ${BORDER}`, borderRadius:10, flexWrap:'wrap', alignItems:'center' }}>
                     <Stat label="Posts generated" value={doneCount} />
                     <Stat label="Scheduled to Blotato" value={scheduledCount} color={scheduledCount>0?GREEN:MUTED} />
                     <Stat label="Date range" value={`${schedule[0]?.date} – ${schedule[schedule.length-1]?.date}`} />
-                    {doneCount > 0 && (
-                      <button onClick={() => schedule?.forEach(slot => {
-                        if (posts[slot.id] && !posts[slot.id].error) approvePost(slot.id, slot.platforms || PLATFORMS_LIST);
-                      })} style={{ ...outlineBtn, color: GREEN, borderColor: GREEN, marginLeft: 'auto', fontSize: 13 }}>
-                        ✓ Approve All
-                      </button>
-                    )}
-                    {!blotatoReady && doneCount>0 && (
-                      <div style={{ display:'flex', alignItems:'center' }}>
-                        <button onClick={()=>setTab('blotato')} style={{ ...outlineBtn, color:BLUE, borderColor:BLUE }}>
+                    <div style={{ display:'flex', gap:8, marginLeft:'auto', flexWrap:'wrap', alignItems:'center' }}>
+                      <button onClick={exportCSV} style={{ ...outlineBtn, fontSize:12 }}>Export CSV</button>
+                      {blotatoReady && !autoSchedule && (
+                        <button onClick={scheduleAll} style={{ ...outlineBtn, fontSize:12, color:P, borderColor:P }}>
+                          Schedule All to Blotato
+                        </button>
+                      )}
+                      {!blotatoReady && (
+                        <button onClick={()=>setTab('blotato')} style={{ ...outlineBtn, fontSize:12, color:BLUE, borderColor:BLUE }}>
                           Set up Blotato →
                         </button>
-                      </div>
-                    )}
+                      )}
+                      {!clearPostsConfirm ? (
+                        <>
+                          <button onClick={()=>{
+                            setPosts({});
+                            setScheduleStatus({});
+                            try { localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
+                          }} style={{ ...outlineBtn, fontSize:12, color:RED, borderColor:RED }}>
+                            Clear All Generated Text
+                          </button>
+                          <button onClick={()=>setClearPostsConfirm(true)}
+                            style={{ ...outlineBtn, fontSize:12, color:RED, borderColor:RED }}>
+                            Delete All Slots
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={async ()=>{
+                          if (schedule) await Promise.all(schedule.map(s => unscheduleSlotFromBlotato(s.id)));
+                          setSchedule(null); setPosts({}); setScheduleStatus({});
+                          setClearPostsConfirm(false);
+                          try { localStorage.removeItem('innago-schedule'); localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
+                        }} style={{ ...primaryBtn, fontSize:12, background:RED }}>
+                          Are you sure? Click to confirm
+                        </button>
+                      )}
+                      <button onClick={() => schedule?.forEach(slot => {
+                        if (posts[slot.id] && !posts[slot.id].error) approvePost(slot.id, slot.platforms || PLATFORMS_LIST);
+                      })} style={{ ...outlineBtn, fontSize:12, color:GREEN, borderColor:GREEN }}>
+                        ✓ Approve All
+                      </button>
+                    </div>
                   </div>
                 )}
 
