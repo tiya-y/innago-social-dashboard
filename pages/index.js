@@ -839,9 +839,9 @@ export default function Dashboard() {
 
         <nav style={{ display:'flex', gap:2, marginLeft:32 }}>
           {[
-            ['config', `New Post${customSlots.length > 0 ? ` (${customSlots.length})` : ''}`],
-            ['review', `Review Queue${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
-            ['library', `Library${Object.keys(approvedPosts).length > 0 ? ` (${Object.keys(approvedPosts).length})` : ''}`],
+            ['config', `Input${customSlots.length > 0 ? ` (${customSlots.length})` : ''}`],
+            ['review', `Approve${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
+            ['library', `History${Object.keys(approvedPosts).length > 0 ? ` (${Object.keys(approvedPosts).length})` : ''}`],
             ['blotato', 'Settings'],
           ].map(([t, label]) => (
             <TabBtn key={t} active={tab===t} onClick={() => { setTab(t); setClearPostsConfirm(false); }} color={P}>{label}</TabBtn>
