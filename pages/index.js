@@ -739,7 +739,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     try {
-      if (schedule !== null) localStorage.setItem('innago-schedule', JSON.stringify(schedule));
+      if (schedule !== null) {
+        localStorage.setItem('innago-schedule', JSON.stringify(schedule));
+      } else {
+        localStorage.removeItem('innago-schedule');
+      }
       localStorage.setItem('innago-posts', JSON.stringify(posts));
       localStorage.setItem('innago-schedule-status', JSON.stringify(scheduleStatus));
     } catch {}
