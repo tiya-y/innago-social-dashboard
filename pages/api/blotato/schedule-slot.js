@@ -49,6 +49,10 @@ export default async function handler(req, res) {
       target.pageId = mapping.pageId;
     }
 
+    // Extract the URL from the post text (last URL found wins)
+    const urlMatch = text.match(/https?:\/\/\S+/g);
+    const postUrl = urlMatch ? urlMatch[urlMatch.length - 1] : undefined;
+
     const body = {
       post: {
         accountId: mapping.accountId,
@@ -56,6 +60,8 @@ export default async function handler(req, res) {
           text,
           mediaUrls,
           platform: TARGET_TYPE[platform],
+          // Pass the article URL separately so LinkedIn/Facebook can generate an OG preview card
+          ...(postUrl && (platform === 'linkedin' || platform === 'facebook') ? { url: postUrl } : {}),
         },
         target,
       },
