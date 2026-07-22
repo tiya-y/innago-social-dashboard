@@ -156,6 +156,7 @@ export default function Dashboard() {
           set('innago-twitter-hooks',   v => setTwitterHooks(v));
           set('innago-used-articles',   v => setUsedArticleUrls(new Set(v)));
           set('social-studio-brand',    v => { if (v === 'reigrove' || v === 'innago') setBrand(v); });
+          dbLoaded.current = true;
           return; // loaded from Neon — skip localStorage fallback
         }
       } catch {}
@@ -184,6 +185,7 @@ export default function Dashboard() {
         const brandStr    = localStorage.getItem('social-studio-brand');
         if (brandStr === 'reigrove' || brandStr === 'innago') setBrand(brandStr);
       } catch {}
+      dbLoaded.current = true;
     }
     loadState();
   }, []);
@@ -213,6 +215,7 @@ export default function Dashboard() {
   const [regeneratingId, setRegeneratingId] = useState(null);
   const [swapArticleSlotId, setSwapArticleSlotId] = useState(null);
   const abortRef = useRef(false);
+  const dbLoaded = useRef(false); // guard: don't write to Neon until initial load completes
 
   // ── Custom articles (manually added to library) ──────────────
   const [newArticleUrl, setNewArticleUrl] = useState('');
@@ -781,6 +784,7 @@ export default function Dashboard() {
 
   // ── Persist state — write to Neon + localStorage cache ────────
   const syncToDb = (key, value) => {
+    if (!dbLoaded.current) return; // block writes until initial load finishes
     // localStorage cache (instant, works offline)
     try {
       if (value === null) {
