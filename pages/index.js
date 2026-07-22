@@ -137,32 +137,55 @@ export default function Dashboard() {
   const [generatedImages, setGeneratedImages] = useState({});  // slotId → { html, loading }
 
 
-  // Load all persisted data from localStorage after mount
+  // Load all persisted data — Neon first, fall back to localStorage cache
   useEffect(() => {
-    try {
-      const slots    = localStorage.getItem('innago-custom-slots');
-      const sched    = localStorage.getItem('innago-schedule');
-      const postsStr = localStorage.getItem('innago-posts');
-      const statStr  = localStorage.getItem('innago-schedule-status');
-      const acctMap = localStorage.getItem('innago-account-mapping');
-      if (slots)    { try { setCustomSlots(JSON.parse(slots));         } catch {} }
-      if (sched)    { try { setSchedule(JSON.parse(sched));             } catch {} }
-      if (postsStr) { try { setPosts(JSON.parse(postsStr));             } catch {} }
-      if (statStr)  { try { setScheduleStatus(JSON.parse(statStr));     } catch {} }
-      if (acctMap)  { try { setAccountMapping(JSON.parse(acctMap));     } catch {} }
-      const customArts = localStorage.getItem('innago-custom-articles');
-      if (customArts) { try { setCustomArticles(JSON.parse(customArts)); } catch {} }
-      const approvedStr = localStorage.getItem('innago-approved-posts');
-      if (approvedStr) { try { setApprovedPosts(JSON.parse(approvedStr)); } catch {} }
-      const imgFbStr = localStorage.getItem('innago-image-feedback');
-      if (imgFbStr) { try { setImageFeedbackHistory(JSON.parse(imgFbStr)); } catch {} }
-      const hooksStr = localStorage.getItem('innago-twitter-hooks');
-      if (hooksStr) { try { setTwitterHooks(JSON.parse(hooksStr)); } catch {} }
-      const usedStr = localStorage.getItem('innago-used-articles');
-      if (usedStr) { try { setUsedArticleUrls(new Set(JSON.parse(usedStr))); } catch {} }
-      const brandStr = localStorage.getItem('social-studio-brand');
-      if (brandStr === 'reigrove' || brandStr === 'innago') setBrand(brandStr);
-    } catch {}
+    async function loadState() {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          const db = await res.json();
+          const set = (key, fn) => { if (db[key] != null) try { fn(db[key]); } catch {} };
+          set('innago-custom-slots',    v => setCustomSlots(v));
+          set('innago-schedule',        v => setSchedule(v));
+          set('innago-posts',           v => setPosts(v));
+          set('innago-schedule-status', v => setScheduleStatus(v));
+          set('innago-account-mapping', v => setAccountMapping(v));
+          set('innago-custom-articles', v => setCustomArticles(v));
+          set('innago-approved-posts',  v => setApprovedPosts(v));
+          set('innago-image-feedback',  v => setImageFeedbackHistory(v));
+          set('innago-twitter-hooks',   v => setTwitterHooks(v));
+          set('innago-used-articles',   v => setUsedArticleUrls(new Set(v)));
+          set('social-studio-brand',    v => { if (v === 'reigrove' || v === 'innago') setBrand(v); });
+          return; // loaded from Neon — skip localStorage fallback
+        }
+      } catch {}
+      // Fallback: localStorage (offline or DB unavailable)
+      try {
+        const slots    = localStorage.getItem('innago-custom-slots');
+        const sched    = localStorage.getItem('innago-schedule');
+        const postsStr = localStorage.getItem('innago-posts');
+        const statStr  = localStorage.getItem('innago-schedule-status');
+        const acctMap  = localStorage.getItem('innago-account-mapping');
+        if (slots)    { try { setCustomSlots(JSON.parse(slots));        } catch {} }
+        if (sched)    { try { setSchedule(JSON.parse(sched));            } catch {} }
+        if (postsStr) { try { setPosts(JSON.parse(postsStr));            } catch {} }
+        if (statStr)  { try { setScheduleStatus(JSON.parse(statStr));    } catch {} }
+        if (acctMap)  { try { setAccountMapping(JSON.parse(acctMap));    } catch {} }
+        const customArts  = localStorage.getItem('innago-custom-articles');
+        if (customArts)  { try { setCustomArticles(JSON.parse(customArts));        } catch {} }
+        const approvedStr = localStorage.getItem('innago-approved-posts');
+        if (approvedStr) { try { setApprovedPosts(JSON.parse(approvedStr));        } catch {} }
+        const imgFbStr    = localStorage.getItem('innago-image-feedback');
+        if (imgFbStr)    { try { setImageFeedbackHistory(JSON.parse(imgFbStr));    } catch {} }
+        const hooksStr    = localStorage.getItem('innago-twitter-hooks');
+        if (hooksStr)    { try { setTwitterHooks(JSON.parse(hooksStr));            } catch {} }
+        const usedStr     = localStorage.getItem('innago-used-articles');
+        if (usedStr)     { try { setUsedArticleUrls(new Set(JSON.parse(usedStr))); } catch {} }
+        const brandStr    = localStorage.getItem('social-studio-brand');
+        if (brandStr === 'reigrove' || brandStr === 'innago') setBrand(brandStr);
+      } catch {}
+    }
+    loadState();
   }, []);
 
   const [accounts, setAccounts] = useState(null);
@@ -418,10 +441,10 @@ export default function Dashboard() {
     try {
       const allUsed = [...new Set([...prevUsed, ...usedThisRun])];
       if (allUsed.length < allArticles.length * 0.8) {
-        localStorage.setItem('innago-used-articles', JSON.stringify(allUsed));
+        syncToDb('innago-used-articles', allUsed);
         setUsedArticleUrls(new Set(allUsed));
       } else {
-        localStorage.removeItem('innago-used-articles');
+        syncToDb('innago-used-articles', null);
         setUsedArticleUrls(new Set());
       }
     } catch {}
@@ -756,46 +779,38 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [highlightedSlotId, tab]);
 
-  // ── Persist all state to localStorage ────────
-  useEffect(() => {
-    try { localStorage.setItem('innago-custom-slots', JSON.stringify(customSlots)); } catch {}
-  }, [customSlots]);
+  // ── Persist state — write to Neon + localStorage cache ────────
+  const syncToDb = (key, value) => {
+    // localStorage cache (instant, works offline)
+    try {
+      if (value === null) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    } catch {}
+    // Neon (async, authoritative)
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    }).catch(() => {});
+  };
+
+  useEffect(() => { syncToDb('innago-custom-slots', customSlots); }, [customSlots]);
 
   useEffect(() => {
-    try {
-      if (schedule !== null) {
-        localStorage.setItem('innago-schedule', JSON.stringify(schedule));
-      } else {
-        localStorage.removeItem('innago-schedule');
-      }
-      localStorage.setItem('innago-posts', JSON.stringify(posts));
-      localStorage.setItem('innago-schedule-status', JSON.stringify(scheduleStatus));
-    } catch {}
+    syncToDb('innago-schedule', schedule);
+    syncToDb('innago-posts', posts);
+    syncToDb('innago-schedule-status', scheduleStatus);
   }, [schedule, posts, scheduleStatus]);
 
-  useEffect(() => {
-    try { localStorage.setItem('innago-account-mapping', JSON.stringify(accountMapping)); } catch {}
-  }, [accountMapping]);
-
-  useEffect(() => {
-    try { localStorage.setItem('innago-custom-articles', JSON.stringify(customArticles)); } catch {}
-  }, [customArticles]);
-
-  useEffect(() => {
-    try { localStorage.setItem('innago-approved-posts', JSON.stringify(approvedPosts)); } catch {}
-  }, [approvedPosts]);
-
-  useEffect(() => {
-    try { localStorage.setItem('innago-image-feedback', JSON.stringify(imageFeedbackHistory)); } catch {}
-  }, [imageFeedbackHistory]);
-
-  useEffect(() => {
-    try { localStorage.setItem('innago-twitter-hooks', JSON.stringify(twitterHooks)); } catch {}
-  }, [twitterHooks]);
-
-  useEffect(() => {
-    try { localStorage.setItem('social-studio-brand', brand); } catch {}
-  }, [brand]);
+  useEffect(() => { syncToDb('innago-account-mapping', accountMapping); }, [accountMapping]);
+  useEffect(() => { syncToDb('innago-custom-articles', customArticles); }, [customArticles]);
+  useEffect(() => { syncToDb('innago-approved-posts', approvedPosts); }, [approvedPosts]);
+  useEffect(() => { syncToDb('innago-image-feedback', imageFeedbackHistory); }, [imageFeedbackHistory]);
+  useEffect(() => { syncToDb('innago-twitter-hooks', twitterHooks); }, [twitterHooks]);
+  useEffect(() => { syncToDb('social-studio-brand', brand); }, [brand]);
 
   // ── Calendar label — uses article category from generated schedule if available ──
   const calendarLabel = (slot) => {
