@@ -259,13 +259,16 @@ export default function Dashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load accounts');
       setAccounts(data.accounts);
-      const mapping = { ...accountMapping };
-      for (const [platform, items] of Object.entries(data.accounts)) {
-        if (items.length > 0) {
-          mapping[platform] = { accountId: items[0].accountId, pageId: items[0].pages?.[0]?.pageId || '' };
+      setAccounts(data.accounts);
+      setAccountMapping(prev => {
+        const mapping = { ...prev };
+        for (const [platform, items] of Object.entries(data.accounts)) {
+          if (items.length > 0 && !mapping[platform]?.accountId) {
+            mapping[platform] = { accountId: items[0].accountId, pageId: items[0].pages?.[0]?.pageId || '' };
+          }
         }
-      }
-      setAccountMapping(mapping);
+        return mapping;
+      });
     } catch (e) {
       setAccountsError(e.message);
     } finally {
@@ -1430,12 +1433,19 @@ export default function Dashboard() {
 
         {/* ══ LIBRARY TAB ══════════════════════════ */}
         {tab==='library' && (() => {
-          // Build library rows from approvedPosts × schedule × posts
-          const rows = Object.entries(approvedPosts).map(([slotId, approval]) => {
-            const slot = schedule?.find(s => s.id === slotId);
-            const post = posts[slotId];
-            return { slotId, slot, post, approval };
-          }).filter(r => r.slot && r.post && !r.post.error);
+          // Build rows from ALL slots that have generated post copy
+          const rows = (schedule || []).map(slot => {
+            const post = posts[slot.id];
+            if (!post || post.error) return null;
+            const approval = approvedPosts[slot.id];
+            const status = scheduleStatus[slot.id];
+            const scheduledPlatforms = status
+              ? Object.entries(status).filter(([,r]) => r?.ok && !r?.deleted).map(([pl]) => pl)
+              : [];
+            const isScheduled = scheduledPlatforms.length > 0;
+            const isApproved  = !!approval;
+            return { slotId: slot.id, slot, post, approval, status, scheduledPlatforms, isScheduled, isApproved };
+          }).filter(Boolean).sort((a, b) => a.slot.date.localeCompare(b.slot.date));
 
           const q = libraryQuery.toLowerCase();
           const filtered = q
@@ -1447,37 +1457,69 @@ export default function Dashboard() {
               )
             : rows;
 
+          const scheduledCount = filtered.filter(r => r.isScheduled).length;
+          const approvedCount  = filtered.filter(r => r.isApproved).length;
+          const thisMonth = filtered.filter(r => r.slot.date?.startsWith(today().slice(0,7))).length;
+
           // CSV export
           const exportLibraryCSV = () => {
-            const header = ['Date','Article','Category','Platforms','Approved At','LinkedIn','Twitter','Facebook','Instagram'];
-            const csvRows = filtered.map(r => [
-              r.slot.date,
-              r.post.title || r.slot.article?.displayTitle || '',
-              r.slot.article?.category || '',
-              (r.approval.platforms || []).join(' | '),
-              r.approval.approvedAt ? new Date(r.approval.approvedAt).toLocaleString() : '',
-              r.post.post_linkedin || '',
-              r.post.post_twitter_x || '',
-              r.post.post_facebook || '',
-              r.post.post_instagram || '',
-            ].map(v => `"${String(v).replace(/"/g,'""')}"`));
+            const header = ['Date','Article','Category','Status','Scheduled Platforms','Approved At','Scheduled Time','LinkedIn','Twitter','Facebook','Instagram'];
+            const csvRows = filtered.map(r => {
+              const scheduledTime = r.scheduledPlatforms.length > 0
+                ? Object.values(r.status).find(v => v?.scheduledTime)?.scheduledTime || ''
+                : '';
+              return [
+                r.slot.date,
+                r.post.title || r.slot.article?.displayTitle || '',
+                r.slot.article?.category || '',
+                r.isScheduled ? 'Scheduled' : r.isApproved ? 'Approved' : 'Generated',
+                r.scheduledPlatforms.join(' | '),
+                r.approval?.approvedAt ? new Date(r.approval.approvedAt).toLocaleString() : '',
+                scheduledTime,
+                r.post.post_linkedin || '',
+                r.post.post_twitter_x || '',
+                r.post.post_facebook || '',
+                r.post.post_instagram || '',
+              ].map(v => `"${String(v).replace(/"/g,'""')}"`);
+            });
             const csv = [header.join(','), ...csvRows.map(r => r.join(','))].join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-            a.download = 'social-library.csv'; a.click();
+            a.download = 'social-history.csv'; a.click();
+          };
+
+          const StatusBadge = ({ row }) => {
+            if (row.isScheduled) return (
+              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, fontWeight:600,
+                background:'#eff6ff', color:BLUE, border:'1px solid #bfdbfe' }}>
+                Scheduled
+              </span>
+            );
+            if (row.isApproved) return (
+              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, fontWeight:600,
+                background:'#f0fdf4', color:GREEN, border:'1px solid #bbf7d0' }}>
+                Approved
+              </span>
+            );
+            return (
+              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, fontWeight:600,
+                background:'#F9FAFB', color:MUTED, border:`1px solid ${BORDER}` }}>
+                Generated
+              </span>
+            );
           };
 
           return (
             <div>
-              {/* Header row */}
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+              {/* Header */}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <div>
-                  <h2 style={{ margin:0, fontSize:20, fontWeight:700, color:TEXT }}>Library</h2>
+                  <h2 style={{ margin:0, fontSize:20, fontWeight:700, color:TEXT }}>History</h2>
                   <p style={{ margin:'4px 0 0', fontSize:13, color:MUTED }}>
-                    All approved posts · {filtered.length} total{q ? ` matching "${libraryQuery}"` : ''}
-                    {(() => {
-                      const thisMonth = filtered.filter(r => r.slot.date?.startsWith(today().slice(0,7))).length;
-                      return thisMonth > 0 ? ` · ${thisMonth} this month` : '';
-                    })()}
+                    {filtered.length} posts total
+                    {scheduledCount > 0 && ` · ${scheduledCount} scheduled to Blotato`}
+                    {approvedCount > 0 && ` · ${approvedCount} approved`}
+                    {thisMonth > 0 && ` · ${thisMonth} this month`}
+                    {q && ` matching "${libraryQuery}"`}
                   </p>
                 </div>
                 <button onClick={exportLibraryCSV} style={{ ...outlineBtn, fontSize:13 }}>Export CSV</button>
@@ -1494,44 +1536,54 @@ export default function Dashboard() {
               {/* Empty state */}
               {filtered.length === 0 && (
                 <div style={{ textAlign:'center', padding:80, color:MUTED }}>
-                  <div style={{ fontSize:40, marginBottom:12 }}>📚</div>
+                  <div style={{ fontSize:40, marginBottom:12 }}>🗂️</div>
                   <p style={{ fontSize:15, fontWeight:600, color:TEXT, margin:'0 0 6px' }}>
-                    {q ? 'No posts match your search.' : 'Nothing in the library yet.'}
+                    {q ? 'No posts match your search.' : 'No posts generated yet.'}
                   </p>
                   <p style={{ fontSize:13, margin:'0 0 18px' }}>
-                    {q ? 'Try a different search term.' : 'Approve posts in the Review Queue to add them here.'}
+                    {q ? 'Try a different search term.' : 'Generate posts in the Input tab to see them here.'}
                   </p>
-                  {!q && <button onClick={()=>setTab('review')} style={primaryBtn}>Go to Review Queue</button>}
+                  {!q && <button onClick={()=>setTab('config')} style={primaryBtn}>Go to Input</button>}
                 </div>
               )}
 
               {/* Table */}
               {filtered.length > 0 && (
                 <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
-                  {/* Table header */}
-                  <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 130px 140px 100px',
+                  <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 120px 110px 130px 80px',
                     background:'#F9FAFB', borderBottom:`1px solid ${BORDER}`,
                     padding:'10px 16px', gap:12 }}>
-                    {['Date','Article','Category','Platforms',''].map(h => (
+                    {['Date','Article','Category','Status','Platforms',''].map(h => (
                       <span key={h} style={{ fontSize:11, fontWeight:700, color:MUTED,
                         textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</span>
                     ))}
                   </div>
 
-                  {/* Rows */}
-                  {filtered.map(({ slotId, slot, post, approval }) => {
+                  {filtered.map((row) => {
+                    const { slotId, slot, post, approval, scheduledPlatforms, isScheduled } = row;
                     const isExpanded = libraryExpandedId === slotId;
-                    const approvedPlatforms = approval.platforms || [];
+                    const displayPlatforms = isScheduled
+                      ? scheduledPlatforms
+                      : (approval?.platforms || slot.platforms || []);
+                    const scheduledTime = isScheduled
+                      ? Object.values(row.status).find(v => v?.scheduledTime)?.scheduledTime
+                      : null;
+
                     return (
                       <div key={slotId} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                        {/* Main row */}
-                        <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 130px 140px 100px',
+                        <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 120px 110px 130px 80px',
                           padding:'12px 16px', gap:12, alignItems:'center',
-                          background: isExpanded ? PBG : '#fff',
-                          cursor:'pointer' }}
+                          background: isExpanded ? PBG : '#fff', cursor:'pointer' }}
                           onClick={() => setLibraryExpandedId(isExpanded ? null : slotId)}>
 
-                          <span style={{ fontSize:13, color:MUTED }}>{slot.date}</span>
+                          <div>
+                            <div style={{ fontSize:13, color:TEXT }}>{slot.date}</div>
+                            {scheduledTime && (
+                              <div style={{ fontSize:11, color:MUTED }}>
+                                {new Date(scheduledTime).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                              </div>
+                            )}
+                          </div>
 
                           <div style={{ overflow:'hidden' }}>
                             <a href={slot.article?.url} target="_blank" rel="noreferrer"
@@ -1540,15 +1592,19 @@ export default function Dashboard() {
                                 overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block' }}>
                               {post.title || slot.article?.displayTitle}
                             </a>
-                            <span style={{ fontSize:11, color:MUTED }}>
-                              Approved {approval.approvedAt ? new Date(approval.approvedAt).toLocaleDateString() : ''}
-                            </span>
+                            {approval?.approvedAt && (
+                              <span style={{ fontSize:11, color:MUTED }}>
+                                Approved {new Date(approval.approvedAt).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
 
                           <span style={{ fontSize:12, color:MUTED }}>{slot.article?.category}</span>
 
+                          <StatusBadge row={row} />
+
                           <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                            {approvedPlatforms.map(pl => (
+                            {displayPlatforms.map(pl => (
                               <span key={pl} style={{ fontSize:10, padding:'2px 6px', borderRadius:8, fontWeight:600,
                                 background: PLATFORM_COLORS[pl]+'18', color:PLATFORM_COLORS[pl] }}>
                                 {PLATFORM_LABELS[pl]}
@@ -1561,7 +1617,6 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        {/* Expanded post content */}
                         {isExpanded && (
                           <div style={{ padding:'0 16px 16px', borderTop:`1px solid ${BORDER}` }}>
                             {[
@@ -1574,6 +1629,11 @@ export default function Dashboard() {
                                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                                   <span style={{ fontSize:11, fontWeight:700, color:PLATFORM_COLORS[pl],
                                     textTransform:'uppercase', letterSpacing:'0.06em' }}>{label}</span>
+                                  {isScheduled && row.status?.[pl]?.scheduledTime && (
+                                    <span style={{ fontSize:11, color:MUTED }}>
+                                      · {new Date(row.status[pl].scheduledTime).toLocaleString()}
+                                    </span>
+                                  )}
                                   <button onClick={()=>navigator.clipboard.writeText(post[field])}
                                     style={{ background:'none', border:'none', cursor:'pointer',
                                       fontSize:11, color:MUTED, textDecoration:'underline', padding:0 }}>
@@ -2032,7 +2092,10 @@ export default function Dashboard() {
 
                 {/* ── LIST VIEW ── */}
                 {reviewView === 'list' && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  {schedule.map(slot=>{
+                  {schedule.filter(slot => {
+                    const ss = scheduleStatus[slot.id];
+                    return !ss || !Object.values(ss).some(p => p?.ok);
+                  }).map(slot=>{
                     const p=posts[slot.id];
                     const field=activePlatform==='universal'?'post':POST_FIELD[activePlatform]||'post_linkedin';
                     const ek=`${slot.id}::${field}`;
