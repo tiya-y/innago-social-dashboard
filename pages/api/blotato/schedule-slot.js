@@ -40,6 +40,13 @@ export default async function handler(req, res) {
       mediaUrls.push(slot.image_url);
     }
 
+    // Extract the URL from the post text (last URL found wins), trimming
+    // any trailing punctuation Claude may have appended after it
+    const urlMatch = text.match(/https?:\/\/\S+/g);
+    const postUrl = urlMatch
+      ? urlMatch[urlMatch.length - 1].replace(/[.,;:!?)\]}'"]+$/, '')
+      : undefined;
+
     // Build target object per platform
     const target = { targetType: TARGET_TYPE[platform] };
     if ((platform === 'facebook' || platform === 'instagram') && mapping.pageId) {
@@ -48,10 +55,12 @@ export default async function handler(req, res) {
     if (platform === 'linkedin' && mapping.pageId) {
       target.pageId = mapping.pageId;
     }
-
-    // Extract the URL from the post text (last URL found wins)
-    const urlMatch = text.match(/https?:\/\/\S+/g);
-    const postUrl = urlMatch ? urlMatch[urlMatch.length - 1] : undefined;
+    // Facebook's OG link-preview card comes from target.link (Blotato has no
+    // equivalent field for LinkedIn — its card can only come from the bare
+    // URL already present in the post text above)
+    if (platform === 'facebook' && postUrl) {
+      target.link = postUrl;
+    }
 
     const body = {
       post: {
@@ -60,8 +69,6 @@ export default async function handler(req, res) {
           text,
           mediaUrls,
           platform: TARGET_TYPE[platform],
-          // Pass the article URL separately so LinkedIn/Facebook can generate an OG preview card
-          ...(postUrl && (platform === 'linkedin' || platform === 'facebook') ? { url: postUrl } : {}),
         },
         target,
       },
