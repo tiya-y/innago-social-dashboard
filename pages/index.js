@@ -152,6 +152,7 @@ export default function Dashboard() {
           set('innago-account-mapping', v => setAccountMapping(v));
           set('innago-custom-articles', v => setCustomArticles(v));
           set('innago-approved-posts',  v => setApprovedPosts(v));
+          set('innago-linkedin-manual', v => setLinkedinManual(v));
           set('innago-image-feedback',  v => setImageFeedbackHistory(v));
           set('innago-twitter-hooks',   v => setTwitterHooks(v));
           set('innago-used-articles',   v => setUsedArticleUrls(new Set(v)));
@@ -176,6 +177,8 @@ export default function Dashboard() {
         if (customArts)  { try { setCustomArticles(JSON.parse(customArts));        } catch {} }
         const approvedStr = localStorage.getItem('innago-approved-posts');
         if (approvedStr) { try { setApprovedPosts(JSON.parse(approvedStr));        } catch {} }
+        const linkedinManualStr = localStorage.getItem('innago-linkedin-manual');
+        if (linkedinManualStr) { try { setLinkedinManual(JSON.parse(linkedinManualStr)); } catch {} }
         const imgFbStr    = localStorage.getItem('innago-image-feedback');
         if (imgFbStr)    { try { setImageFeedbackHistory(JSON.parse(imgFbStr));    } catch {} }
         const hooksStr    = localStorage.getItem('innago-twitter-hooks');
@@ -209,6 +212,10 @@ export default function Dashboard() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [activePlatform, setActivePlatform] = useState('universal');
   const [approvedPosts, setApprovedPosts] = useState({});
+  // LinkedIn is posted manually (Blotato has no reliable link-preview/scheduling
+  // path for it) — this tracks per-slot confirmation that the post was copied
+  // into LinkedIn's own scheduler. slotId -> { confirmedAt }
+  const [linkedinManual, setLinkedinManual] = useState({});
   const [editingKey, setEditingKey] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [copiedKey, setCopiedKey] = useState(null);
@@ -247,6 +254,14 @@ export default function Dashboard() {
   ).length;
   const totalSlots = schedule?.length || 0;
   const blotatoReady = accounts && hasValidMapping();
+
+  // ── Per-platform "done" status — LinkedIn is manual, everything else is Blotato ──
+  const isPlatformDone = (slot, pl) =>
+    pl === 'linkedin'
+      ? !!linkedinManual[slot.id]?.confirmedAt
+      : !!scheduleStatus[slot.id]?.[pl]?.ok;
+  const allPlatformsDone = (slot) =>
+    (slot.platforms || PLATFORMS_LIST).every(pl => isPlatformDone(slot, pl));
 
   // ── Blotato account loading ──────────────────
   const loadAccounts = async () => {
@@ -542,9 +557,10 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slot: { date: slot.date, ...postData },
+          // LinkedIn is posted manually — never send it to Blotato
           accountMapping: Object.fromEntries(
             Object.entries(accountMapping).filter(([p, v]) =>
-              v.accountId && (!slot.platforms || slot.platforms.includes(p))
+              p !== 'linkedin' && v.accountId && (!slot.platforms || slot.platforms.includes(p))
             )
           ),
           postingTime: slot.time || '09:00',
@@ -701,6 +717,25 @@ export default function Dashboard() {
     }
   };
 
+  // ── LinkedIn manual posting confirmation ─────
+  // LinkedIn is copy/pasted into LinkedIn's own scheduler by hand, so a slot's
+  // LinkedIn post is only "done" once this is explicitly confirmed here.
+  const confirmLinkedinCopied = (slotId) => {
+    setLinkedinManual(prev => {
+      const next = { ...prev, [slotId]: { confirmedAt: new Date().toISOString() } };
+      try { localStorage.setItem('innago-linkedin-manual', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const unconfirmLinkedinCopied = (slotId) => {
+    setLinkedinManual(prev => {
+      const next = { ...prev };
+      delete next[slotId];
+      try { localStorage.setItem('innago-linkedin-manual', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   // ── AI Image generation ──────────────────────
   const generateImage = async (slot) => {
     const p = posts[slot.id];
@@ -815,6 +850,7 @@ export default function Dashboard() {
   useEffect(() => { syncToDb('innago-account-mapping', accountMapping); }, [accountMapping]);
   useEffect(() => { syncToDb('innago-custom-articles', customArticles); }, [customArticles]);
   useEffect(() => { syncToDb('innago-approved-posts', approvedPosts); }, [approvedPosts]);
+  useEffect(() => { syncToDb('innago-linkedin-manual', linkedinManual); }, [linkedinManual]);
   useEffect(() => { syncToDb('innago-image-feedback', imageFeedbackHistory); }, [imageFeedbackHistory]);
   useEffect(() => { syncToDb('innago-twitter-hooks', twitterHooks); }, [twitterHooks]);
   useEffect(() => { syncToDb('social-studio-brand', brand); }, [brand]);
@@ -1439,9 +1475,10 @@ export default function Dashboard() {
             if (!post || post.error) return null;
             const approval = approvedPosts[slot.id];
             const status = scheduleStatus[slot.id];
-            const scheduledPlatforms = status
-              ? Object.entries(status).filter(([,r]) => r?.ok && !r?.deleted).map(([pl]) => pl)
-              : [];
+            const scheduledPlatforms = [
+              ...(status ? Object.entries(status).filter(([,r]) => r?.ok && !r?.deleted).map(([pl]) => pl) : []),
+              ...(linkedinManual[slot.id]?.confirmedAt ? ['linkedin'] : []),
+            ];
             const isScheduled = scheduledPlatforms.length > 0;
             const isApproved  = !!approval;
             return { slotId: slot.id, slot, post, approval, status, scheduledPlatforms, isScheduled, isApproved };
@@ -2011,7 +2048,7 @@ export default function Dashboard() {
                                   const p=posts[slot.id];
                                   const hasPost=p&&!p.error;
                                   const slotStatus=scheduleStatus[slot.id];
-                                  const isScheduled=slotStatus&&!slotStatus._loading&&Object.keys(slotStatus).length>0&&Object.values(slotStatus).every(v=>v?.ok);
+                                  const isScheduled=!slotStatus?._loading&&allPlatformsDone(slot);
                                   const color=isScheduled?GREEN:hasPost?BLUE:MUTED;
                                   return (
                                     <div key={slot.id}
@@ -2060,8 +2097,7 @@ export default function Dashboard() {
                                   (slot.platforms||PLATFORMS_LIST).map(platform=>({ slot, platform }))
                                 ).map(({slot,platform})=>{
                                   const p=posts[slot.id];
-                                  const slotStatus=scheduleStatus[slot.id];
-                                  const isScheduled=slotStatus?.[platform]?.ok;
+                                  const isScheduled=isPlatformDone(slot, platform);
                                   const color=PLATFORM_COLORS[platform];
                                   return (
                                     <div key={`${slot.id}-${platform}`}
@@ -2092,10 +2128,7 @@ export default function Dashboard() {
 
                 {/* ── LIST VIEW ── */}
                 {reviewView === 'list' && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  {schedule.filter(slot => {
-                    const ss = scheduleStatus[slot.id];
-                    return !ss || !Object.values(ss).some(p => p?.ok);
-                  }).map(slot=>{
+                  {schedule.filter(slot => !allPlatformsDone(slot)).map(slot=>{
                     const p=posts[slot.id];
                     const field=activePlatform==='universal'?'post':POST_FIELD[activePlatform]||'post_linkedin';
                     const ek=`${slot.id}::${field}`;
@@ -2209,12 +2242,18 @@ export default function Dashboard() {
                           )}
 
                           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
-                            {slotStatus && !slotStatus._loading && (
+                            {((slotStatus && !slotStatus._loading) || (slot.platforms||PLATFORMS_LIST).includes('linkedin')) && (
                               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                                {Object.entries(slotStatus).map(([plat,r])=>(
+                                {slotStatus && !slotStatus._loading && Object.entries(slotStatus).map(([plat,r])=>(
                                   <StatusChip key={plat} platform={plat} result={r}
                                     onUnschedule={r?.ok ? ()=>unschedulePost(slot.id, plat) : null} />
                                 ))}
+                                {(slot.platforms||PLATFORMS_LIST).includes('linkedin') && (
+                                  <LinkedinManualChip
+                                    confirmed={!!linkedinManual[slot.id]?.confirmedAt}
+                                    onUndo={()=>unconfirmLinkedinCopied(slot.id)}
+                                  />
+                                )}
                               </div>
                             )}
                             {slotStatus?._loading && <span style={{ fontSize:12, color:MUTED }}>Scheduling…</span>}
@@ -2241,14 +2280,27 @@ export default function Dashboard() {
                                   style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', opacity:generating?0.5:1 }}>
                                   Regenerate
                                 </button>
-                                {blotatoReady && !slotStatus?._loading && (
-                                  <button onClick={async()=>{
-                                    setScheduleStatus(prev=>({...prev,[slot.id]:{_loading:true}}));
-                                    const r=await scheduleSlot(slot.id,p);
-                                    setScheduleStatus(prev=>({...prev,[slot.id]:r}));
-                                  }} style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:BLUE, borderColor:BLUE }}>
-                                    {slotStatus ? 'Reschedule' : 'Schedule to Blotato'}
-                                  </button>
+                                {activePlatform === 'linkedin' ? (
+                                  linkedinManual[slot.id]?.confirmedAt ? (
+                                    <span style={{ fontSize:12, color:GREEN, fontWeight:600, padding:'5px 10px' }}>
+                                      ✓ Scheduled in LinkedIn
+                                    </span>
+                                  ) : (
+                                    <button onClick={()=>confirmLinkedinCopied(slot.id)}
+                                      style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:'#0A66C2', borderColor:'#0A66C2' }}>
+                                      ✓ Copied to LinkedIn
+                                    </button>
+                                  )
+                                ) : (
+                                  blotatoReady && !slotStatus?._loading && (
+                                    <button onClick={async()=>{
+                                      setScheduleStatus(prev=>({...prev,[slot.id]:{_loading:true}}));
+                                      const r=await scheduleSlot(slot.id,p);
+                                      setScheduleStatus(prev=>({...prev,[slot.id]:r}));
+                                    }} style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:BLUE, borderColor:BLUE }}>
+                                      {slotStatus ? 'Reschedule' : 'Schedule to Blotato'}
+                                    </button>
+                                  )
                                 )}
                                 <button onClick={()=>isEditing?saveEdit(slot.id,field):startEdit(slot.id,field)}
                                   style={{ ...outlineBtn, fontSize:12, padding:'5px 10px',
@@ -2418,6 +2470,19 @@ export default function Dashboard() {
                                           ✓ Approve
                                         </button>
                                       )}
+                                      {pl === 'linkedin' && (
+                                        linkedinManual[slot.id]?.confirmedAt ? (
+                                          <span style={{ fontSize:11, color:PLATFORM_COLORS.linkedin, fontWeight:600, padding:'2px 6px' }}>
+                                            ✓ Copied to LinkedIn
+                                          </span>
+                                        ) : (
+                                          <button onClick={() => confirmLinkedinCopied(slot.id)}
+                                            style={{ background:'none', border:'none', cursor:'pointer',
+                                              fontSize:12, color:PLATFORM_COLORS.linkedin, padding:'2px 6px', fontWeight:600 }}>
+                                            ✓ Copied to LinkedIn
+                                          </button>
+                                        )
+                                      )}
                                     </div>
                                   </div>
                                   {plEditing ? (
@@ -2583,6 +2648,27 @@ function StatusChip({ platform, result, onUnschedule }) {
           style={{ color, fontSize:10, marginLeft:2, opacity:0.7, textDecoration:'none' }}>
           ↗
         </a>
+      )}
+    </span>
+  );
+}
+
+// LinkedIn is posted by hand (copy/paste into LinkedIn's own scheduler),
+// so its status is a manual confirmation rather than a Blotato result.
+function LinkedinManualChip({ confirmed, onUndo }) {
+  const color = confirmed ? PLATFORM_COLORS.linkedin : YELLOW;
+  const bg = confirmed ? '#f0fdf4' : '#fffbeb';
+  const border = confirmed ? '#bbf7d0' : '#fde68a';
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, padding:'2px 7px',
+      borderRadius:10, border:`1px solid ${border}`, background:bg, color, fontWeight:600 }}>
+      {confirmed ? '✓' : '○'} LinkedIn {confirmed ? '(manual)' : '(copy pending)'}
+      {confirmed && onUndo && (
+        <button onClick={onUndo} title="Undo — not actually posted yet"
+          style={{ background:'none', border:'none', cursor:'pointer', padding:0,
+            color, fontSize:10, marginLeft:2, opacity:0.7 }}>
+          ↺
+        </button>
       )}
     </span>
   );
