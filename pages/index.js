@@ -805,6 +805,33 @@ export default function Dashboard() {
     a.click();
   };
 
+  // ── LinkedIn batch — approved LinkedIn posts not yet copied over, for manual scheduling ──
+  const linkedinBatchRows = (schedule || [])
+    .filter(slot => (slot.platforms || PLATFORMS_LIST).includes('linkedin'))
+    .filter(slot => approvedPosts[slot.id]?.platforms?.includes('linkedin'))
+    .filter(slot => !linkedinManual[slot.id]?.confirmedAt)
+    .filter(slot => posts[slot.id] && !posts[slot.id].error)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const exportLinkedinBatchCSV = () => {
+    if (linkedinBatchRows.length === 0) return;
+    const headers = ['date', 'time', 'article_title', 'article_url', 'linkedin_post'];
+    const rows = linkedinBatchRows.map(slot => {
+      const p = posts[slot.id] || {};
+      return [
+        slot.date, slot.time || '',
+        p.title || slot.article?.displayTitle || '', slot.article?.url || '',
+        p.post_linkedin || p.post || '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+    const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `linkedin-batch-${linkedinBatchRows[0]?.date || today()}.csv`,
+    });
+    a.click();
+  };
+
   // ── Scroll to highlighted slot in Review tab ─
   useEffect(() => {
     if (!highlightedSlotId || tab !== 'review') return;
@@ -1950,6 +1977,69 @@ export default function Dashboard() {
                       })} style={{ ...outlineBtn, fontSize:12, color:GREEN, borderColor:GREEN }}>
                         ✓ Approve All
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* LinkedIn Batch — approved LinkedIn posts, downloadable as CSV for manual scheduling */}
+                {!generating && linkedinBatchRows.length > 0 && (
+                  <div style={{ marginBottom:20, padding:'14px 18px', background:'#fff',
+                    border:`1px solid ${BORDER}`, borderLeft:`4px solid ${PLATFORM_COLORS.linkedin}`, borderRadius:10 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                      marginBottom:10, flexWrap:'wrap', gap:8 }}>
+                      <div>
+                        <span style={{ fontWeight:700, fontSize:14, color:PLATFORM_COLORS.linkedin }}>
+                          LinkedIn Batch
+                        </span>
+                        <span style={{ marginLeft:8, fontSize:13, color:MUTED }}>
+                          {linkedinBatchRows.length} approved post{linkedinBatchRows.length!==1?'s':''} ready to schedule manually
+                        </span>
+                      </div>
+                      <button onClick={exportLinkedinBatchCSV}
+                        style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
+                        ⬇ Download CSV
+                      </button>
+                    </div>
+                    <div style={{ overflowX:'auto' }}>
+                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                        <thead>
+                          <tr style={{ textAlign:'left', color:MUTED, borderBottom:`1px solid ${BORDER}` }}>
+                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Date</th>
+                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Time</th>
+                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Article</th>
+                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Post</th>
+                            <th style={{ padding:'4px 8px', fontWeight:600 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {linkedinBatchRows.map(slot => {
+                            const p = posts[slot.id];
+                            const text = p?.post_linkedin || p?.post || '';
+                            return (
+                              <tr key={slot.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap', color:TEXT }}>{slot.date}</td>
+                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap', color:MUTED }}>{slot.time}</td>
+                                <td style={{ padding:'6px 8px', maxWidth:180, overflow:'hidden',
+                                  textOverflow:'ellipsis', whiteSpace:'nowrap', color:TEXT }}>
+                                  {p?.title || slot.article?.displayTitle}
+                                </td>
+                                <td style={{ padding:'6px 8px', maxWidth:340, overflow:'hidden',
+                                  textOverflow:'ellipsis', whiteSpace:'nowrap', color:MUTED }}
+                                  title={text}>
+                                  {text}
+                                </td>
+                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap' }}>
+                                  <button onClick={()=>confirmLinkedinCopied(slot.id)}
+                                    style={{ background:'none', border:'none', cursor:'pointer', fontSize:12,
+                                      color:PLATFORM_COLORS.linkedin, fontWeight:600 }}>
+                                    ✓ Copied
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
