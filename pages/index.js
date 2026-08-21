@@ -101,6 +101,12 @@ export default function Dashboard() {
   const [tab, setTab] = useState('config');
   const [brand, setBrand] = useState('innago'); // 'innago' | 'reigrove'
 
+  // ── Brand isolation ───────────────────────────
+  // Slots are tagged with the brand they were created under so switching the
+  // toggle only shows/acts on that brand's content. Untagged (legacy) slots
+  // predate the REI Grove toggle, so they're treated as Innago.
+  const isBrandSlot = (slot) => (slot.brand || 'innago') === brand;
+
   // ── Custom slot builder ──────────────────────
   // A slot: { id, date, time, platforms: string[], category: string, topicOverride: string, articleUrl: string }
   const [customSlots, setCustomSlots] = useState([]);
@@ -247,12 +253,8 @@ export default function Dashboard() {
   // ── Used articles tracking ───────────────────────────────────
   const [usedArticleUrls, setUsedArticleUrls] = useState(new Set());
 
-  // ── Derived ──────────────────────────────────
-  const doneCount = Object.keys(posts).length;
-  const scheduledCount = Object.values(scheduleStatus).filter((s) =>
-    s && !s._loading && Object.keys(s).length > 0 && Object.values(s).every((v) => v?.ok)
-  ).length;
-  const totalSlots = schedule?.length || 0;
+  // ── Derived (current brand only) ──────────────
+  const brandSchedule = (schedule || []).filter(isBrandSlot);
   const blotatoReady = accounts && hasValidMapping();
 
   // ── Per-platform "done" status — LinkedIn is manual, everything else is Blotato ──
@@ -262,6 +264,10 @@ export default function Dashboard() {
       : !!scheduleStatus[slot.id]?.[pl]?.ok;
   const allPlatformsDone = (slot) =>
     (slot.platforms || PLATFORMS_LIST).every(pl => isPlatformDone(slot, pl));
+
+  const doneCount = brandSchedule.filter(s => posts[s.id]).length;
+  const scheduledCount = brandSchedule.filter(s => allPlatformsDone(s)).length;
+  const totalSlots = brandSchedule.length;
 
   // ── Blotato account loading ──────────────────
   const loadAccounts = async () => {
@@ -330,7 +336,7 @@ export default function Dashboard() {
   // ── Slot management ──────────────────────────
   const addSlot = () => {
     if (!slotForm.date || !slotForm.platforms.length) return;
-    setCustomSlots(p => [...p, { ...slotForm, id: uid() }]);
+    setCustomSlots(p => [...p, { ...slotForm, id: uid(), brand }]);
     setSlotForm(f => ({ ...f, topicOverride: '', articleUrl: '' }));
   };
 
@@ -346,7 +352,7 @@ export default function Dashboard() {
     while (cur <= end && guard++ < 500) {
       const wd = cur.getDay() === 0 ? 6 : cur.getDay() - 1;
       if (days.includes(wd)) {
-        newSlots.push({ id: uid(), date: cur.toISOString().slice(0,10), time, platforms: [...platforms], topicOverride: topicKeyword || '' });
+        newSlots.push({ id: uid(), date: cur.toISOString().slice(0,10), time, platforms: [...platforms], topicOverride: topicKeyword || '', brand });
       }
       cur.setDate(cur.getDate() + 1);
     }
@@ -367,7 +373,7 @@ export default function Dashboard() {
         const dateStr = cur.toISOString().slice(0, 10);
         if (wd >= 1 && wd <= 4 && !usedDates.has(dateStr)) {
           usedDates.add(dateStr);
-          newSlots.push({ id: uid(), date: dateStr, time: recurForm.time, platforms: [...recurForm.platforms], topicOverride: '', articleUrl: url });
+          newSlots.push({ id: uid(), date: dateStr, time: recurForm.time, platforms: [...recurForm.platforms], topicOverride: '', articleUrl: url, brand });
           cur.setDate(cur.getDate() + 1);
           break;
         }
@@ -386,7 +392,7 @@ export default function Dashboard() {
   const existingSlotIds = new Set((schedule || []).map(s => s.id));
 
   // Slots that haven't been generated yet
-  const newCustomSlots = customSlots.filter(s => !existingSlotIds.has(s.id));
+  const newCustomSlots = customSlots.filter(s => !existingSlotIds.has(s.id) && isBrandSlot(s));
 
   const handleGenerate = async () => {
     if (!newCustomSlots.length) return;
@@ -455,7 +461,7 @@ export default function Dashboard() {
         }
       }
 
-      return { ...slot, platforms, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek };
+      return { ...slot, brand, platforms, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek };
     });
 
     // Save used URLs
@@ -572,9 +578,10 @@ export default function Dashboard() {
     }
   };
 
-  const scheduleAll = async () => {
-    if (!schedule) return;
-    for (const slot of schedule) {
+  const scheduleAll = async (slots) => {
+    const targets = slots || schedule;
+    if (!targets) return;
+    for (const slot of targets) {
       const postData = posts[slot.id];
       if (!postData || postData.error) continue;
       setScheduleStatus(p => ({ ...p, [slot.id]: { _loading: true } }));
@@ -786,12 +793,12 @@ export default function Dashboard() {
     }
   };
 
-  // ── Export CSV ───────────────────────────────
+  // ── Export CSV (current brand only) ───────────
   const exportCSV = () => {
-    if (!schedule) return;
+    if (!brandSchedule.length) return;
     const headers = ['date','day','time','platforms','boosted_topic','category','source_title','source_url',
       'post','post_linkedin','post_facebook','post_twitter_x','post_instagram'];
-    const rows = schedule.map((slot) => {
+    const rows = brandSchedule.map((slot) => {
       const p = posts[slot.id] || {};
       return [
         slot.date, slot.day, slot.time||'', (slot.platforms||[]).join(';'),
@@ -801,12 +808,12 @@ export default function Dashboard() {
       ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
     });
     const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `innago-social-${schedule[0]?.date||'export'}.csv` });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${brand}-social-${brandSchedule[0]?.date||'export'}.csv` });
     a.click();
   };
 
   // ── LinkedIn batch — approved LinkedIn posts not yet copied over, for manual scheduling ──
-  const linkedinBatchRows = (schedule || [])
+  const linkedinBatchRows = brandSchedule
     .filter(slot => (slot.platforms || PLATFORMS_LIST).includes('linkedin'))
     .filter(slot => approvedPosts[slot.id]?.platforms?.includes('linkedin'))
     .filter(slot => !linkedinManual[slot.id]?.confirmedAt)
@@ -890,8 +897,9 @@ export default function Dashboard() {
     return slotLabel(slot);
   };
 
-  // ── Sorted slot list for display ─────────────
-  const sortedCustomSlots = [...customSlots].sort((a, b) => (a.date+a.time).localeCompare(b.date+b.time));
+  // ── Sorted slot list for display (current brand only) ────────
+  const brandCustomSlots = customSlots.filter(isBrandSlot);
+  const sortedCustomSlots = [...brandCustomSlots].sort((a, b) => (a.date+a.time).localeCompare(b.date+b.time));
 
   // ── Brand tokens (switches on toggle) ────────
   const isRG = brand === 'reigrove';
@@ -924,8 +932,8 @@ export default function Dashboard() {
 
         <nav style={{ display:'flex', gap:2, marginLeft:32 }}>
           {[
-            ['config', `Input${customSlots.length > 0 ? ` (${customSlots.length})` : ''}`],
-            ['review', `Approve${schedule ? ` (${doneCount}/${totalSlots})` : ''}`],
+            ['config', `Input${brandCustomSlots.length > 0 ? ` (${brandCustomSlots.length})` : ''}`],
+            ['review', `Approve${totalSlots > 0 ? ` (${doneCount}/${totalSlots})` : ''}`],
             ['library', `History${Object.keys(approvedPosts).length > 0 ? ` (${Object.keys(approvedPosts).length})` : ''}`],
             ['blotato', 'Settings'],
           ].map(([t, label]) => (
@@ -963,7 +971,7 @@ export default function Dashboard() {
               {/* Header with view toggles */}
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <h3 style={{ margin:0, fontSize:15, fontWeight:600, color:TEXT }}>
-                  Your Schedule {customSlots.length > 0 && `(${customSlots.length} slot${customSlots.length!==1?'s':''})`}
+                  Your Schedule {brandCustomSlots.length > 0 && `(${brandCustomSlots.length} slot${brandCustomSlots.length!==1?'s':''})`}
                 </h3>
                 <div style={{ display:'flex', gap:4 }}>
                   {['list','calendar'].map(v=>(
@@ -981,7 +989,7 @@ export default function Dashboard() {
               {/* ── LIST VIEW ── */}
               {scheduleView === 'list' && (
                 <>
-                  {customSlots.length > 0 && (
+                  {brandCustomSlots.length > 0 && (
                     <div style={{ display:'flex', gap:8, marginBottom:12, alignItems:'center' }}>
                       <span style={{ fontSize:12, color:MUTED, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', flexShrink:0 }}>Filter:</span>
                       <input type="date" value={slotFilterFrom} onChange={e=>setSlotFilterFrom(e.target.value)}
@@ -995,7 +1003,7 @@ export default function Dashboard() {
                       )}
                     </div>
                   )}
-                  {customSlots.length === 0 ? (
+                  {brandCustomSlots.length === 0 ? (
                     <div style={{ textAlign:'center', padding:'48px 0', color:MUTED }}>
                       <div style={{ fontSize:36, marginBottom:10 }}>📅</div>
                       <p style={{ fontSize:14, margin:0, lineHeight:1.6 }}>No slots yet.<br/>Use Quick Add below to build your schedule.</p>
@@ -1175,8 +1183,8 @@ export default function Dashboard() {
                 </>
               )}
 
-              {customSlots.length > 0 && (
-                <button onClick={()=>setCustomSlots([])}
+              {brandCustomSlots.length > 0 && (
+                <button onClick={()=>setCustomSlots(prev => prev.filter(s => !isBrandSlot(s)))}
                   style={{ ...outlineBtn, marginTop:12, width:'100%', fontSize:13, color:RED, borderColor:RED }}>
                   Clear all slots
                 </button>
@@ -1508,7 +1516,8 @@ export default function Dashboard() {
             ];
             const isScheduled = scheduledPlatforms.length > 0;
             const isApproved  = !!approval;
-            return { slotId: slot.id, slot, post, approval, status, scheduledPlatforms, isScheduled, isApproved };
+            const rowBrand = slot.brand || 'innago'; // legacy slots predate the REI Grove toggle
+            return { slotId: slot.id, slot, post, approval, status, scheduledPlatforms, isScheduled, isApproved, brand: rowBrand };
           }).filter(Boolean).sort((a, b) => a.slot.date.localeCompare(b.slot.date));
 
           const q = libraryQuery.toLowerCase();
@@ -1517,7 +1526,8 @@ export default function Dashboard() {
                 (r.slot.article?.displayTitle || '').toLowerCase().includes(q) ||
                 (r.slot.article?.category || '').toLowerCase().includes(q) ||
                 (r.slot.date || '').includes(q) ||
-                (r.post.post_linkedin || r.post.post || '').toLowerCase().includes(q)
+                (r.post.post_linkedin || r.post.post || '').toLowerCase().includes(q) ||
+                (r.brand === 'reigrove' ? 'rei grove reigrove' : 'innago').includes(q)
               )
             : rows;
 
@@ -1527,13 +1537,14 @@ export default function Dashboard() {
 
           // CSV export
           const exportLibraryCSV = () => {
-            const header = ['Date','Article','Category','Status','Scheduled Platforms','Approved At','Scheduled Time','LinkedIn','Twitter','Facebook','Instagram'];
+            const header = ['Date','Brand','Article','Category','Status','Scheduled Platforms','Approved At','Scheduled Time','LinkedIn','Twitter','Facebook','Instagram'];
             const csvRows = filtered.map(r => {
               const scheduledTime = r.scheduledPlatforms.length > 0
                 ? Object.values(r.status).find(v => v?.scheduledTime)?.scheduledTime || ''
                 : '';
               return [
                 r.slot.date,
+                r.brand === 'reigrove' ? 'REI Grove' : 'Innago',
                 r.post.title || r.slot.article?.displayTitle || '',
                 r.slot.article?.category || '',
                 r.isScheduled ? 'Scheduled' : r.isApproved ? 'Approved' : 'Generated',
@@ -1614,17 +1625,17 @@ export default function Dashboard() {
               {/* Table */}
               {filtered.length > 0 && (
                 <div style={{ background:'#fff', border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
-                  <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 120px 110px 130px 80px',
+                  <div style={{ display:'grid', gridTemplateColumns:'110px 90px 1fr 120px 110px 130px 80px',
                     background:'#F9FAFB', borderBottom:`1px solid ${BORDER}`,
                     padding:'10px 16px', gap:12 }}>
-                    {['Date','Article','Category','Status','Platforms',''].map(h => (
+                    {['Date','Brand','Article','Category','Status','Platforms',''].map(h => (
                       <span key={h} style={{ fontSize:11, fontWeight:700, color:MUTED,
                         textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</span>
                     ))}
                   </div>
 
                   {filtered.map((row) => {
-                    const { slotId, slot, post, approval, scheduledPlatforms, isScheduled } = row;
+                    const { slotId, slot, post, approval, scheduledPlatforms, isScheduled, brand: rowBrand } = row;
                     const isExpanded = libraryExpandedId === slotId;
                     const displayPlatforms = isScheduled
                       ? scheduledPlatforms
@@ -1635,7 +1646,7 @@ export default function Dashboard() {
 
                     return (
                       <div key={slotId} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                        <div style={{ display:'grid', gridTemplateColumns:'110px 1fr 120px 110px 130px 80px',
+                        <div style={{ display:'grid', gridTemplateColumns:'110px 90px 1fr 120px 110px 130px 80px',
                           padding:'12px 16px', gap:12, alignItems:'center',
                           background: isExpanded ? PBG : '#fff', cursor:'pointer' }}
                           onClick={() => setLibraryExpandedId(isExpanded ? null : slotId)}>
@@ -1648,6 +1659,14 @@ export default function Dashboard() {
                               </div>
                             )}
                           </div>
+
+                          <span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, fontWeight:600,
+                            width:'fit-content',
+                            background: rowBrand==='reigrove' ? '#EAF0E8' : BLUE_BG,
+                            color: rowBrand==='reigrove' ? '#57823C' : BLUE,
+                            border: `1px solid ${rowBrand==='reigrove' ? '#C8E0B8' : '#bfdbfe'}` }}>
+                            {rowBrand==='reigrove' ? 'REI Grove' : 'Innago'}
+                          </span>
 
                           <div style={{ overflow:'hidden' }}>
                             <a href={slot.article?.url} target="_blank" rel="noreferrer"
@@ -1905,7 +1924,7 @@ export default function Dashboard() {
         {/* ══ REVIEW TAB ════════════════════════ */}
         {tab==='review' && (
           <>
-            {!schedule && (
+            {brandSchedule.length === 0 && (
               <div style={{ textAlign:'center', padding:80, color:MUTED }}>
                 <div style={{ fontSize:48, marginBottom:16 }}>📅</div>
                 <p style={{ fontSize:16 }}>Build your schedule and click <strong>Generate Posts</strong>.</p>
@@ -1913,7 +1932,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {schedule && (
+            {brandSchedule.length > 0 && (
               <>
                 {/* Progress bar */}
                 {generating && (
@@ -1935,11 +1954,11 @@ export default function Dashboard() {
                     background:'#fff', border:`1px solid ${BORDER}`, borderRadius:10, flexWrap:'wrap', alignItems:'center' }}>
                     <Stat label="Posts generated" value={doneCount} />
                     <Stat label="Scheduled to Blotato" value={scheduledCount} color={scheduledCount>0?GREEN:MUTED} />
-                    <Stat label="Date range" value={`${schedule[0]?.date} – ${schedule[schedule.length-1]?.date}`} />
+                    <Stat label="Date range" value={`${brandSchedule[0]?.date} – ${brandSchedule[brandSchedule.length-1]?.date}`} />
                     <div style={{ display:'flex', gap:8, marginLeft:'auto', flexWrap:'wrap', alignItems:'center' }}>
                       <button onClick={exportCSV} style={{ ...outlineBtn, fontSize:12 }}>Export CSV</button>
                       {blotatoReady && !autoSchedule && (
-                        <button onClick={scheduleAll} style={{ ...outlineBtn, fontSize:12, color:P, borderColor:P }}>
+                        <button onClick={()=>scheduleAll(brandSchedule)} style={{ ...outlineBtn, fontSize:12, color:P, borderColor:P }}>
                           Schedule All to Blotato
                         </button>
                       )}
@@ -1951,9 +1970,9 @@ export default function Dashboard() {
                       {!clearPostsConfirm ? (
                         <>
                           <button onClick={()=>{
-                            setPosts({});
-                            setScheduleStatus({});
-                            try { localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
+                            const ids = new Set(brandSchedule.map(s=>s.id));
+                            setPosts(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
+                            setScheduleStatus(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
                           }} style={{ ...outlineBtn, fontSize:12, color:RED, borderColor:RED }}>
                             Clear All Generated Text
                           </button>
@@ -1964,15 +1983,19 @@ export default function Dashboard() {
                         </>
                       ) : (
                         <button onClick={async ()=>{
-                          if (schedule) await Promise.all(schedule.map(s => unscheduleSlotFromBlotato(s.id)));
-                          setSchedule(null); setPosts({}); setScheduleStatus({});
+                          const ids = new Set(brandSchedule.map(s=>s.id));
+                          await Promise.all(brandSchedule.map(s => unscheduleSlotFromBlotato(s.id)));
+                          setSchedule(prev => (prev || []).filter(s => !ids.has(s.id)));
+                          setPosts(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
+                          setScheduleStatus(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
+                          setApprovedPosts(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
+                          setLinkedinManual(prev => Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
                           setClearPostsConfirm(false);
-                          try { localStorage.removeItem('innago-schedule'); localStorage.removeItem('innago-posts'); localStorage.removeItem('innago-schedule-status'); } catch {}
                         }} style={{ ...primaryBtn, fontSize:12, background:RED }}>
                           Are you sure? Click to confirm
                         </button>
                       )}
-                      <button onClick={() => schedule?.forEach(slot => {
+                      <button onClick={() => brandSchedule.forEach(slot => {
                         if (posts[slot.id] && !posts[slot.id].error) approvePost(slot.id, slot.platforms || PLATFORMS_LIST);
                       })} style={{ ...outlineBtn, fontSize:12, color:GREEN, borderColor:GREEN }}>
                         ✓ Approve All
@@ -2087,7 +2110,7 @@ export default function Dashboard() {
                 {/* ── CALENDAR VIEW ── */}
                 {reviewView === 'calendar' && (() => {
                   const postsByDate = {};
-                  (schedule||[]).forEach(slot => {
+                  brandSchedule.forEach(slot => {
                     if (!postsByDate[slot.date]) postsByDate[slot.date] = [];
                     postsByDate[slot.date].push(slot);
                   });
@@ -2218,7 +2241,7 @@ export default function Dashboard() {
 
                 {/* ── LIST VIEW ── */}
                 {reviewView === 'list' && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  {schedule.filter(slot => !allPlatformsDone(slot)).map(slot=>{
+                  {brandSchedule.filter(slot => !allPlatformsDone(slot)).map(slot=>{
                     const p=posts[slot.id];
                     const field=activePlatform==='universal'?'post':POST_FIELD[activePlatform]||'post_linkedin';
                     const ek=`${slot.id}::${field}`;
