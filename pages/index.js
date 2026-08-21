@@ -258,9 +258,13 @@ export default function Dashboard() {
   const blotatoReady = accounts && hasValidMapping();
 
   // ── Per-platform "done" status — LinkedIn is manual, everything else is Blotato ──
+  // Also accept a legacy scheduleStatus.linkedin.ok record: before LinkedIn was
+  // switched to the manual copy/paste flow, it was scheduled to Blotato directly
+  // like every other platform, so old already-posted slots have a real "ok" there
+  // and were never going to get a "Copied to LinkedIn" confirmation retroactively.
   const isPlatformDone = (slot, pl) =>
     pl === 'linkedin'
-      ? !!linkedinManual[slot.id]?.confirmedAt
+      ? !!linkedinManual[slot.id]?.confirmedAt || !!scheduleStatus[slot.id]?.linkedin?.ok
       : !!scheduleStatus[slot.id]?.[pl]?.ok;
   const allPlatformsDone = (slot) =>
     (slot.platforms || PLATFORMS_LIST).every(pl => isPlatformDone(slot, pl));
