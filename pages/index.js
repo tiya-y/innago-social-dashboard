@@ -2022,10 +2022,17 @@ export default function Dashboard() {
                           {linkedinBatchRows.length} approved post{linkedinBatchRows.length!==1?'s':''} ready to schedule manually
                         </span>
                       </div>
-                      <button onClick={exportLinkedinBatchCSV}
-                        style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
-                        ⬇ Download CSV
-                      </button>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={exportLinkedinBatchCSV}
+                          style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
+                          ⬇ Download CSV
+                        </button>
+                        <button onClick={()=>linkedinBatchRows.forEach(slot=>confirmLinkedinCopied(slot.id))}
+                          title="Use once the whole batch has actually been posted to LinkedIn"
+                          style={{ ...outlineBtn, fontSize:12, color:GREEN, borderColor:GREEN }}>
+                          ✓ Mark All as Copied
+                        </button>
+                      </div>
                     </div>
                     <div style={{ overflowX:'auto' }}>
                       <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
