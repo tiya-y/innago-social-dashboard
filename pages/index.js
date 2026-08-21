@@ -159,6 +159,7 @@ export default function Dashboard() {
           set('innago-custom-articles', v => setCustomArticles(v));
           set('innago-approved-posts',  v => setApprovedPosts(v));
           set('innago-linkedin-manual', v => setLinkedinManual(v));
+          set('innago-manual-done',     v => setManualDone(v));
           set('innago-image-feedback',  v => setImageFeedbackHistory(v));
           set('innago-twitter-hooks',   v => setTwitterHooks(v));
           set('innago-used-articles',   v => setUsedArticleUrls(new Set(v)));
@@ -185,6 +186,8 @@ export default function Dashboard() {
         if (approvedStr) { try { setApprovedPosts(JSON.parse(approvedStr));        } catch {} }
         const linkedinManualStr = localStorage.getItem('innago-linkedin-manual');
         if (linkedinManualStr) { try { setLinkedinManual(JSON.parse(linkedinManualStr)); } catch {} }
+        const manualDoneStr = localStorage.getItem('innago-manual-done');
+        if (manualDoneStr) { try { setManualDone(JSON.parse(manualDoneStr)); } catch {} }
         const imgFbStr    = localStorage.getItem('innago-image-feedback');
         if (imgFbStr)    { try { setImageFeedbackHistory(JSON.parse(imgFbStr));    } catch {} }
         const hooksStr    = localStorage.getItem('innago-twitter-hooks');
@@ -222,6 +225,11 @@ export default function Dashboard() {
   // path for it) — this tracks per-slot confirmation that the post was copied
   // into LinkedIn's own scheduler. slotId -> { confirmedAt }
   const [linkedinManual, setLinkedinManual] = useState({});
+  // Escape hatch for a slot that was actually published outside Blotato
+  // (most commonly: its date already passed, and Blotato refuses to schedule
+  // a post in the past) — lets it leave the Approve queue anyway.
+  // slotId -> { confirmedAt }
+  const [manualDone, setManualDone] = useState({});
   const [editingKey, setEditingKey] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [copiedKey, setCopiedKey] = useState(null);
@@ -266,8 +274,21 @@ export default function Dashboard() {
     pl === 'linkedin'
       ? !!linkedinManual[slot.id]?.confirmedAt || !!scheduleStatus[slot.id]?.linkedin?.ok
       : !!scheduleStatus[slot.id]?.[pl]?.ok;
-  const allPlatformsDone = (slot) =>
-    (slot.platforms || PLATFORMS_LIST).every(pl => isPlatformDone(slot, pl));
+  // A slot leaves Approve once it's been SCHEDULED (to Blotato, or manually
+  // confirmed for LinkedIn) — never just because it was approved. LinkedIn's
+  // separate manual confirmation only gates the slot when LinkedIn is its only
+  // platform; when other platforms exist, scheduling those to Blotato is enough
+  // to move on, and the LinkedIn Batch panel keeps tracking the copy separately.
+  // manualDone is an escape hatch for posts Blotato can never schedule (e.g. it
+  // refuses to schedule a date that's already passed) but that were actually
+  // published outside the tool.
+  const allPlatformsDone = (slot) => {
+    if (manualDone[slot.id]?.confirmedAt) return true;
+    const platforms = slot.platforms || PLATFORMS_LIST;
+    const nonLinkedin = platforms.filter(pl => pl !== 'linkedin');
+    if (nonLinkedin.length > 0) return nonLinkedin.every(pl => isPlatformDone(slot, pl));
+    return isPlatformDone(slot, 'linkedin');
+  };
 
   const doneCount = brandSchedule.filter(s => posts[s.id]).length;
   const scheduledCount = brandSchedule.filter(s => allPlatformsDone(s)).length;
@@ -747,6 +768,23 @@ export default function Dashboard() {
     });
   };
 
+  // ── Manual "posted outside Blotato" override ──
+  const confirmManualDone = (slotId) => {
+    setManualDone(prev => {
+      const next = { ...prev, [slotId]: { confirmedAt: new Date().toISOString() } };
+      try { localStorage.setItem('innago-manual-done', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const unconfirmManualDone = (slotId) => {
+    setManualDone(prev => {
+      const next = { ...prev };
+      delete next[slotId];
+      try { localStorage.setItem('innago-manual-done', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   // ── AI Image generation ──────────────────────
   const generateImage = async (slot) => {
     const p = posts[slot.id];
@@ -889,6 +927,7 @@ export default function Dashboard() {
   useEffect(() => { syncToDb('innago-custom-articles', customArticles); }, [customArticles]);
   useEffect(() => { syncToDb('innago-approved-posts', approvedPosts); }, [approvedPosts]);
   useEffect(() => { syncToDb('innago-linkedin-manual', linkedinManual); }, [linkedinManual]);
+  useEffect(() => { syncToDb('innago-manual-done', manualDone); }, [manualDone]);
   useEffect(() => { syncToDb('innago-image-feedback', imageFeedbackHistory); }, [imageFeedbackHistory]);
   useEffect(() => { syncToDb('innago-twitter-hooks', twitterHooks); }, [twitterHooks]);
   useEffect(() => { syncToDb('social-studio-brand', brand); }, [brand]);
@@ -1514,10 +1553,12 @@ export default function Dashboard() {
             if (!post || post.error) return null;
             const approval = approvedPosts[slot.id];
             const status = scheduleStatus[slot.id];
-            const scheduledPlatforms = [
-              ...(status ? Object.entries(status).filter(([,r]) => r?.ok && !r?.deleted).map(([pl]) => pl) : []),
-              ...(linkedinManual[slot.id]?.confirmedAt ? ['linkedin'] : []),
-            ];
+            const scheduledPlatforms = manualDone[slot.id]?.confirmedAt
+              ? (slot.platforms || PLATFORMS_LIST)
+              : [
+                  ...(status ? Object.entries(status).filter(([,r]) => r?.ok && !r?.deleted).map(([pl]) => pl) : []),
+                  ...(linkedinManual[slot.id]?.confirmedAt ? ['linkedin'] : []),
+                ];
             const isScheduled = scheduledPlatforms.length > 0;
             const isApproved  = !!approval;
             const rowBrand = slot.brand || 'innago'; // legacy slots predate the REI Grove toggle
@@ -2382,6 +2423,12 @@ export default function Dashboard() {
                             )}
                             {slotStatus?._loading && <span style={{ fontSize:12, color:MUTED }}>Scheduling…</span>}
 
+                            <button onClick={()=>confirmManualDone(slot.id)}
+                              title="Use when this was actually published outside Blotato — e.g. Blotato refuses to schedule a date that's already passed"
+                              style={{ background:'none', border:'none', cursor:'pointer', fontSize:11,
+                                color:MUTED, textDecoration:'underline', padding:0 }}>
+                              Mark as fully posted
+                            </button>
 
                             {p && !p.error && !isLoading && (
                               <button onClick={()=> hasAiImage ? setImgFeedbackSlotId(slot.id) : generateImage(slot)}
