@@ -250,6 +250,18 @@ async function fetchArticleMeta(url) {
   }
 }
 
+// ── Em dash scrub ──────────────────────────────────────────────
+// The brand voice rules explicitly forbid em dashes, but Claude reaches for
+// them by default often enough that the prompt alone doesn't reliably stop
+// it. Strip them deterministically so the rule is actually enforced instead
+// of just requested.
+function stripEmDashes(text) {
+  if (!text) return text;
+  return text
+    .replace(/\s*—\s*/g, ', ')
+    .replace(/\s*--\s*/g, ', ');
+}
+
 // ── Twitter character check + retry ──────────────────────────
 function twitterTextLength(post, url) {
   // Text before the URL (URL itself counts as ~23 chars on Twitter)
@@ -273,7 +285,7 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
     max_tokens: 100,
     messages: [{ role: 'user', content: prompt }],
   });
-  return msg.content[0].text.trim();
+  return stripEmDashes(msg.content[0].text.trim());
 }
 
 // ── Main handler ──────────────────────────────────────────────
@@ -330,6 +342,9 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
     const raw = msg.content[0].text.trim()
       .replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
     posts = JSON.parse(raw);
+    for (const key of ['twitter', 'linkedin', 'facebook', 'instagram']) {
+      if (posts[key]) posts[key] = stripEmDashes(posts[key]);
+    }
   } catch (err) {
     console.error('Claude API error:', err);
     return res.status(500).json({ error: 'Failed to generate post', detail: err.message });
