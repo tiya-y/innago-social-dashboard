@@ -849,7 +849,9 @@ export default function Dashboard() {
         p.post||'', p.post_linkedin||'', p.post_facebook||'', p.post_twitter_x||'', p.post_instagram||'',
       ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
     });
-    const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    // Leading BOM so Excel detects UTF-8 instead of mangling em dashes/smart quotes as Windows-1252
+    const BOM = String.fromCharCode(0xFEFF);
+    const blob = new Blob([BOM + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${brand}-social-${brandSchedule[0]?.date||'export'}.csv` });
     a.click();
   };
@@ -873,7 +875,8 @@ export default function Dashboard() {
         p.post_linkedin || p.post || '',
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
     });
-    const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    const BOM = String.fromCharCode(0xFEFF);
+    const blob = new Blob([BOM + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(blob),
       download: `linkedin-batch-${linkedinBatchRows[0]?.date || today()}.csv`,
@@ -1602,8 +1605,9 @@ export default function Dashboard() {
                 r.post.post_instagram || '',
               ].map(v => `"${String(v).replace(/"/g,'""')}"`);
             });
+            const BOM = String.fromCharCode(0xFEFF);
             const csv = [header.join(','), ...csvRows.map(r => r.join(','))].join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(BOM + csv);
             a.download = 'social-history.csv'; a.click();
           };
 
