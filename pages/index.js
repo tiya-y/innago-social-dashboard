@@ -640,6 +640,8 @@ export default function Dashboard() {
       setScheduleStatus(p => ({ ...p, [slot.id]: { _loading: true } }));
       const result = await scheduleSlot(slot.id, postData);
       setScheduleStatus(p => ({ ...p, [slot.id]: result }));
+      // Respect Blotato rate limits between slots
+      await new Promise(r => setTimeout(r, 1500));
       if (result?.error) { failed++; firstError = firstError || result.error; continue; }
       const platformResults = Object.entries(result).filter(([,v]) => v && typeof v === 'object');
       const anyOk = platformResults.some(([,v]) => v.ok);
