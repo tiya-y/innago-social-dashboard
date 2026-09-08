@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [openCategory, setOpenCategory] = useState(null);
   const [scheduleView, setScheduleView] = useState('calendar');
   const [clearPostsConfirm, setClearPostsConfirm] = useState(false);
+  const [scheduleMsg, setScheduleMsg] = useState(null); // { ok, text }
   const [calendarMode, setCalendarMode] = useState('month');
   const [calendarFocus, setCalendarFocus] = useState(today);
   const [reviewView, setReviewView] = useState('list');
@@ -621,12 +622,36 @@ export default function Dashboard() {
   const scheduleAll = async (slots) => {
     const targets = slots || schedule;
     if (!targets) return;
+    setScheduleMsg(null);
+
+    // Guard: no non-LinkedIn accounts configured
+    const schedulableAccounts = Object.entries(accountMapping)
+      .filter(([p, v]) => p !== 'linkedin' && v.accountId);
+    if (schedulableAccounts.length === 0) {
+      setScheduleMsg({ ok: false, text: 'No accounts configured. Go to Settings, click "Connect & Load Accounts", then make sure Twitter, Instagram, or Facebook account IDs are saved.' });
+      return;
+    }
+
+    let succeeded = 0, failed = 0, skipped = 0;
     for (const slot of targets) {
       const postData = posts[slot.id];
-      if (!postData || postData.error) continue;
+      if (!postData || postData.error) { skipped++; continue; }
       setScheduleStatus(p => ({ ...p, [slot.id]: { _loading: true } }));
       const result = await scheduleSlot(slot.id, postData);
       setScheduleStatus(p => ({ ...p, [slot.id]: result }));
+      const platformResults = Object.values(result).filter(v => v && typeof v === 'object');
+      const anyOk = platformResults.some(v => v.ok);
+      const anyFail = platformResults.some(v => !v.ok && !v._loading);
+      if (anyOk) succeeded++;
+      else if (anyFail) failed++;
+      else skipped++;
+    }
+    if (succeeded > 0) {
+      setScheduleMsg({ ok: true, text: `Scheduled ${succeeded} post${succeeded !== 1 ? 's' : ''} to Blotato.${failed > 0 ? ` ${failed} failed — check individual slots.` : ''}` });
+    } else if (failed > 0) {
+      setScheduleMsg({ ok: false, text: `All ${failed} posts failed to schedule. Check your Blotato account IDs in Settings.` });
+    } else {
+      setScheduleMsg({ ok: false, text: 'Nothing was scheduled — posts may already be scheduled or have no content.' });
     }
   };
 
@@ -2028,6 +2053,15 @@ export default function Dashboard() {
                     <Stat label="Posts generated" value={doneCount} />
                     <Stat label="Scheduled to Blotato" value={scheduledCount} color={scheduledCount>0?GREEN:MUTED} />
                     <Stat label="Date range" value={`${brandSchedule[0]?.date} – ${brandSchedule[brandSchedule.length-1]?.date}`} />
+                    {scheduleMsg && (
+                      <div style={{ width:'100%', marginTop:4, padding:'8px 12px', borderRadius:8, fontSize:13,
+                        background: scheduleMsg.ok ? '#f0fdf4' : '#fef2f2',
+                        border: `1px solid ${scheduleMsg.ok ? '#bbf7d0' : '#fecaca'}`,
+                        color: scheduleMsg.ok ? GREEN : RED }}>
+                        {scheduleMsg.ok ? '✓ ' : '⚠ '}{scheduleMsg.text}
+                        <button onClick={()=>setScheduleMsg(null)} style={{ float:'right', background:'none', border:'none', cursor:'pointer', color:'inherit', fontSize:13 }}>✕</button>
+                      </div>
+                    )}
                     <div style={{ display:'flex', gap:8, marginLeft:'auto', flexWrap:'wrap', alignItems:'center' }}>
                       <button onClick={exportCSV} style={{ ...outlineBtn, fontSize:12 }}>Export CSV</button>
                       {blotatoReady && !autoSchedule && (
