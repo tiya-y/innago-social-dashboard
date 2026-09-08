@@ -15,6 +15,8 @@ const YELLOW = '#ca8a04';
 
 const PLATFORM_LABELS = { twitter: 'Twitter/X', instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn' };
 const PLATFORM_COLORS = { twitter: '#000', instagram: '#E1306C', facebook: '#1877F2', linkedin: '#0A66C2' };
+const INNAGO_PLATFORMS = ['twitter', 'instagram', 'facebook', 'linkedin'];
+const RG_PLATFORMS     = ['twitter', 'instagram', 'facebook'];
 const POST_FIELD = { twitter: 'post_twitter_x', instagram: 'post_instagram', facebook: 'post_facebook', linkedin: 'post_linkedin' };
 const CHAR_LIMITS = { twitter: 280, instagram: 2200, facebook: 63206, linkedin: 3000, universal: null };
 const PLATFORMS_LIST = ['linkedin', 'twitter', 'instagram', 'facebook'];
@@ -155,7 +157,8 @@ export default function Dashboard() {
           set('innago-schedule',        v => setSchedule(v));
           set('innago-posts',           v => setPosts(v));
           set('innago-schedule-status', v => setScheduleStatus(v));
-          set('innago-account-mapping', v => setAccountMapping(v));
+          set('innago-account-mapping', v => setInnagoMapping(v));
+          set('rg-account-mapping',    v => setRgMapping(v));
           set('innago-custom-articles', v => setCustomArticles(v));
           set('innago-approved-posts',  v => setApprovedPosts(v));
           set('innago-linkedin-manual', v => setLinkedinManual(v));
@@ -175,11 +178,13 @@ export default function Dashboard() {
         const postsStr = localStorage.getItem('innago-posts');
         const statStr  = localStorage.getItem('innago-schedule-status');
         const acctMap  = localStorage.getItem('innago-account-mapping');
+        const rgMap    = localStorage.getItem('rg-account-mapping');
         if (slots)    { try { setCustomSlots(JSON.parse(slots));        } catch {} }
         if (sched)    { try { setSchedule(JSON.parse(sched));            } catch {} }
         if (postsStr) { try { setPosts(JSON.parse(postsStr));            } catch {} }
         if (statStr)  { try { setScheduleStatus(JSON.parse(statStr));    } catch {} }
-        if (acctMap)  { try { setAccountMapping(JSON.parse(acctMap));    } catch {} }
+        if (acctMap)  { try { setInnagoMapping(JSON.parse(acctMap));     } catch {} }
+        if (rgMap)    { try { setRgMapping(JSON.parse(rgMap));           } catch {} }
         const customArts  = localStorage.getItem('innago-custom-articles');
         if (customArts)  { try { setCustomArticles(JSON.parse(customArts));        } catch {} }
         const approvedStr = localStorage.getItem('innago-approved-posts');
@@ -205,11 +210,16 @@ export default function Dashboard() {
   const [accounts, setAccounts] = useState(null);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState('');
-  const [accountMapping, setAccountMapping] = useState({
+  const [innagoMapping, setInnagoMapping] = useState({
     twitter:   { accountId: '', pageId: '' },
     instagram: { accountId: '', pageId: '' },
     facebook:  { accountId: '', pageId: '' },
     linkedin:  { accountId: '', pageId: '' },
+  });
+  const [rgMapping, setRgMapping] = useState({
+    twitter:   { accountId: '', pageId: '' },
+    instagram: { accountId: '', pageId: '' },
+    facebook:  { accountId: '', pageId: '' },
   });
   const [autoSchedule, setAutoSchedule] = useState(false);
 
@@ -304,7 +314,6 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load accounts');
-      setAccounts(data.accounts);
       setAccounts(data.accounts);
       setAccountMapping(prev => {
         const mapping = { ...prev };
@@ -574,7 +583,7 @@ export default function Dashboard() {
   const handleGenerateSafe = () => handleGenerate().catch(() => setGenerating(false));
 
   function hasValidMapping() {
-    return Object.values(accountMapping).some((m) => m.accountId);
+    return activePlatforms.some(p => accountMapping[p]?.accountId);
   }
 
   // ── Schedule a single slot ───────────────────
@@ -926,7 +935,8 @@ export default function Dashboard() {
     syncToDb('innago-schedule-status', scheduleStatus);
   }, [schedule, posts, scheduleStatus]);
 
-  useEffect(() => { syncToDb('innago-account-mapping', accountMapping); }, [accountMapping]);
+  useEffect(() => { syncToDb('innago-account-mapping', innagoMapping); }, [innagoMapping]);
+  useEffect(() => { syncToDb('rg-account-mapping',    rgMapping);     }, [rgMapping]);
   useEffect(() => { syncToDb('innago-custom-articles', customArticles); }, [customArticles]);
   useEffect(() => { syncToDb('innago-approved-posts', approvedPosts); }, [approvedPosts]);
   useEffect(() => { syncToDb('innago-linkedin-manual', linkedinManual); }, [linkedinManual]);
@@ -949,6 +959,10 @@ export default function Dashboard() {
 
   // ── Brand tokens (switches on toggle) ────────
   const isRG = brand === 'reigrove';
+  // Active mapping aliases — resolves to the right brand's saved accounts
+  const accountMapping    = isRG ? rgMapping    : innagoMapping;
+  const setAccountMapping = isRG ? setRgMapping : setInnagoMapping;
+  const activePlatforms   = isRG ? RG_PLATFORMS : INNAGO_PLATFORMS;
   const P    = isRG ? '#57823C' : BLUE;       // primary color
   const PBG  = isRG ? '#EAF0E8' : BLUE_BG;   // primary light bg
   const PBORDER = isRG ? '#C8E0B8' : BORDER;  // primary border tint
@@ -1818,18 +1832,18 @@ export default function Dashboard() {
               {accountsError && <p style={{ color:RED, fontSize:13, marginTop:8 }}>{accountsError}</p>}
             </Card>
 
-            <Card title="Account Mapping">
+            <Card title={`Account Mapping — ${isRG ? 'REI Grove' : 'Innago'}`}>
               <p style={{ margin:'0 0 4px', fontSize:13, color:MUTED }}>
                 Paste your Blotato Account ID and Page ID for each platform. Find these in Blotato → Settings → Social Accounts.
               </p>
               <p style={{ margin:'0 0 16px', fontSize:12, color:MUTED }}>
-                LinkedIn and Facebook require a <strong>Page ID</strong> to post as a company page.
+                Facebook requires a <strong>Page ID</strong> to post as a company page.
               </p>
-              {PLATFORMS_LIST.map(platform => {
+              {activePlatforms.map(platform => {
                 const items = accounts?.[platform] || [];
                 const mapping = accountMapping[platform] || {};
                 const color = PLATFORM_COLORS[platform];
-                const needsPage = platform === 'facebook' || platform === 'linkedin';
+                const needsPage = platform === 'facebook';
                 return (
                   <div key={platform} style={{ marginBottom:20, padding:'14px 16px', borderRadius:10,
                     border:`1px solid ${mapping.accountId ? BORDER : BORDER}`, background:'#fafafa' }}>
@@ -1876,7 +1890,7 @@ export default function Dashboard() {
                       {needsPage && (
                         <div>
                           <label style={{ fontSize:11, fontWeight:600, color:MUTED, textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:3 }}>
-                            Page ID {platform === 'facebook' ? '(required)' : '(company page)'}
+                            Page ID (required for Facebook)
                           </label>
                           {/* Page dropdown if loaded */}
                           {items.length > 0 && items.find(a => a.accountId === mapping.accountId)?.pages?.length > 0 && (
