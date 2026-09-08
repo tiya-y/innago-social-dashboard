@@ -223,6 +223,12 @@ export default function Dashboard() {
   });
   const [autoSchedule, setAutoSchedule] = useState(false);
 
+  // ── Brand aliases (derived early so everything below can use them) ──
+  const isRG            = brand === 'reigrove';
+  const accountMapping    = isRG ? rgMapping    : innagoMapping;
+  const setAccountMapping = isRG ? setRgMapping : setInnagoMapping;
+  const activePlatforms   = isRG ? RG_PLATFORMS : INNAGO_PLATFORMS;
+
   // ── Generation + review state ────────────────
   const [schedule, setSchedule] = useState(null);
   const [posts, setPosts] = useState({});
@@ -958,11 +964,6 @@ export default function Dashboard() {
   const sortedCustomSlots = [...brandCustomSlots].sort((a, b) => (a.date+a.time).localeCompare(b.date+b.time));
 
   // ── Brand tokens (switches on toggle) ────────
-  const isRG = brand === 'reigrove';
-  // Active mapping aliases — resolves to the right brand's saved accounts
-  const accountMapping    = isRG ? rgMapping    : innagoMapping;
-  const setAccountMapping = isRG ? setRgMapping : setInnagoMapping;
-  const activePlatforms   = isRG ? RG_PLATFORMS : INNAGO_PLATFORMS;
   const P    = isRG ? '#57823C' : BLUE;       // primary color
   const PBG  = isRG ? '#EAF0E8' : BLUE_BG;   // primary light bg
   const PBORDER = isRG ? '#C8E0B8' : BORDER;  // primary border tint
