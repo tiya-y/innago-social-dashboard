@@ -15,7 +15,7 @@ const YELLOW = '#ca8a04';
 
 const PLATFORM_LABELS = { twitter: 'Twitter/X', instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn' };
 const PLATFORM_COLORS = { twitter: '#000', instagram: '#E1306C', facebook: '#1877F2', linkedin: '#0A66C2' };
-const INNAGO_PLATFORMS = ['twitter', 'instagram', 'facebook', 'linkedin'];
+const INNAGO_PLATFORMS = ['twitter', 'instagram', 'facebook'];
 const RG_PLATFORMS     = ['twitter', 'instagram', 'facebook'];
 const POST_FIELD = { twitter: 'post_twitter_x', instagram: 'post_instagram', facebook: 'post_facebook', linkedin: 'post_linkedin' };
 const CHAR_LIMITS = { twitter: 280, instagram: 2200, facebook: 63206, linkedin: 3000, universal: null };
@@ -215,7 +215,6 @@ export default function Dashboard() {
     twitter:   { accountId: '', pageId: '' },
     instagram: { accountId: '', pageId: '' },
     facebook:  { accountId: '', pageId: '' },
-    linkedin:  { accountId: '', pageId: '' },
   });
   const [rgMapping, setRgMapping] = useState({
     twitter:   { accountId: '', pageId: '' },
@@ -604,10 +603,9 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slot: { date: slot.date, ...postData },
-          // LinkedIn is posted manually — never send it to Blotato
           accountMapping: Object.fromEntries(
             Object.entries(accountMapping).filter(([p, v]) =>
-              p !== 'linkedin' && v.accountId && (!slot.platforms || slot.platforms.includes(p))
+              v.accountId && (!slot.platforms || slot.platforms.includes(p))
             )
           ),
           postingTime: slot.time || '09:00',
@@ -626,7 +624,7 @@ export default function Dashboard() {
 
     // Guard: no non-LinkedIn accounts configured
     const schedulableAccounts = Object.entries(accountMapping)
-      .filter(([p, v]) => p !== 'linkedin' && v.accountId);
+      .filter(([, v]) => v.accountId);
     if (schedulableAccounts.length === 0) {
       setScheduleMsg({ ok: false, text: 'No accounts configured. Go to Settings, click "Connect & Load Accounts", then make sure Twitter, Instagram, or Facebook account IDs are saved.' });
       return;
