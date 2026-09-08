@@ -1853,11 +1853,20 @@ export default function Dashboard() {
                       <span style={{ fontWeight:600, fontSize:14 }}>{PLATFORM_LABELS[platform]}</span>
                       {mapping.accountId && (!needsPage || mapping.pageId) && (
                         <span style={{ fontSize:11, color:GREEN, background:'#f0fdf4', border:'1px solid #bbf7d0',
-                          borderRadius:999, padding:'1px 8px', marginLeft:'auto' }}>✓ ready</span>
+                          borderRadius:999, padding:'1px 8px' }}>✓ ready</span>
                       )}
                       {mapping.accountId && needsPage && !mapping.pageId && (
                         <span style={{ fontSize:11, color:YELLOW, background:'#fefce8', border:'1px solid #fde68a',
-                          borderRadius:999, padding:'1px 8px', marginLeft:'auto' }}>needs page ID</span>
+                          borderRadius:999, padding:'1px 8px' }}>needs page ID</span>
+                      )}
+                      {mapping.accountId && (
+                        <button
+                          onClick={() => setAccountMapping(p => ({ ...p, [platform]: { accountId: '', pageId: '' } }))}
+                          style={{ marginLeft:'auto', fontSize:11, color:RED, background:'none', border:'none',
+                            cursor:'pointer', padding:'2px 6px', borderRadius:4 }}
+                          title="Remove connection">
+                          Remove
+                        </button>
                       )}
                     </div>
 
