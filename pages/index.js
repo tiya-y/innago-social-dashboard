@@ -633,6 +633,7 @@ export default function Dashboard() {
     let succeeded = 0, failed = 0, skipped = 0;
     let firstError = null;
     for (const slot of targets) {
+      if (slot.date < today()) { skipped++; continue; }
       const postData = posts[slot.id];
       if (!postData || postData.error) { skipped++; continue; }
       setScheduleStatus(p => ({ ...p, [slot.id]: { _loading: true } }));
@@ -2362,7 +2363,7 @@ export default function Dashboard() {
 
                 {/* ── LIST VIEW ── */}
                 {reviewView === 'list' && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                  {brandSchedule.filter(slot => !allPlatformsDone(slot)).map(slot=>{
+                  {brandSchedule.filter(slot => !allPlatformsDone(slot) && slot.date >= today()).map(slot=>{
                     const p=posts[slot.id];
                     const field=activePlatform==='universal'?'post':POST_FIELD[activePlatform]||'post_linkedin';
                     const ek=`${slot.id}::${field}`;
