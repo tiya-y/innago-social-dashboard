@@ -633,23 +633,30 @@ export default function Dashboard() {
     }
 
     let succeeded = 0, failed = 0, skipped = 0;
+    let firstError = null;
     for (const slot of targets) {
       const postData = posts[slot.id];
       if (!postData || postData.error) { skipped++; continue; }
       setScheduleStatus(p => ({ ...p, [slot.id]: { _loading: true } }));
       const result = await scheduleSlot(slot.id, postData);
       setScheduleStatus(p => ({ ...p, [slot.id]: result }));
-      const platformResults = Object.values(result).filter(v => v && typeof v === 'object');
-      const anyOk = platformResults.some(v => v.ok);
-      const anyFail = platformResults.some(v => !v.ok && !v._loading);
+      if (result?.error) { failed++; firstError = firstError || result.error; continue; }
+      const platformResults = Object.entries(result).filter(([,v]) => v && typeof v === 'object');
+      const anyOk = platformResults.some(([,v]) => v.ok);
+      const anyFail = platformResults.some(([,v]) => !v.ok);
       if (anyOk) succeeded++;
-      else if (anyFail) failed++;
-      else skipped++;
+      else if (anyFail) {
+        failed++;
+        if (!firstError) {
+          const failEntry = platformResults.find(([,v]) => !v.ok);
+          if (failEntry) firstError = `${failEntry[0]}: ${failEntry[1].error || 'unknown error'}`;
+        }
+      } else skipped++;
     }
     if (succeeded > 0) {
-      setScheduleMsg({ ok: true, text: `Scheduled ${succeeded} post${succeeded !== 1 ? 's' : ''} to Blotato.${failed > 0 ? ` ${failed} failed — check individual slots.` : ''}` });
+      setScheduleMsg({ ok: true, text: `Scheduled ${succeeded} post${succeeded !== 1 ? 's' : ''} to Blotato.${failed > 0 ? ` ${failed} failed.` : ''}` });
     } else if (failed > 0) {
-      setScheduleMsg({ ok: false, text: `All ${failed} posts failed to schedule. Check your Blotato account IDs in Settings.` });
+      setScheduleMsg({ ok: false, text: `All ${failed} posts failed. Blotato error: "${firstError || 'unknown'}"` });
     } else {
       setScheduleMsg({ ok: false, text: 'Nothing was scheduled — posts may already be scheduled or have no content.' });
     }
