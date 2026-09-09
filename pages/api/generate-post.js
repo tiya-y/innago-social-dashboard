@@ -44,7 +44,9 @@ NEVER USE in any post:
 - Words: crucial, essential, vital, navigate, landscape, leverage, streamline, dive into, delve
 - Mentioning Innago by name in the post body
 - Hashtags or emojis
-- Exclamation points`;
+- Exclamation points
+- Litotes: never express a positive by negating its opposite (no "not bad", "not uncommon", "not a small amount", "not without reason"). Say what you mean directly.
+- Irony or sarcasm of any kind. Every sentence must mean exactly what it says.`;
 
 const RG_BRAND_RULES = `
 VOICE: Warm, credible, and practical — like a knowledgeable neighbor who has been investing for years and genuinely wants to help you grow. Not a hype machine, not a guru. Encouraging to beginners, respectful of experienced investors. Short sentences. Plain language. No jargon.
@@ -80,7 +82,9 @@ NEVER USE in any post:
 - Words: crucial, essential, vital, navigate, landscape, leverage, streamline, dive into, delve, game-changer, supercharge, unlock
 - Mentioning REI Grove by name in the post body
 - Hashtags or emojis
-- Exclamation points`;
+- Exclamation points
+- Litotes: never express a positive by negating its opposite (no "not bad", "not uncommon", "not a small amount", "not without reason"). Say what you mean directly.
+- Irony or sarcasm of any kind. Every sentence must mean exactly what it says.`;
 
 // ── Multi-platform system prompts ─────────────────────────────
 const INNAGO_SYSTEM_PROMPT = `You write platform-specific social media posts for Innago, a free property management platform for independent landlords.
