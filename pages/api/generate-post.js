@@ -301,10 +301,10 @@ export default async function handler(req, res) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bitlyKey = process.env.BITLY_API_KEY;
   if (!url) return res.status(400).json({ error: 'url is required' });
-  if (!requestedPlatforms || requestedPlatforms.length === 0)
-    return res.status(400).json({ error: 'No accounts mapped. Add account IDs in Settings before generating posts.' });
 
   const isRG = brand === 'reigrove';
+  const allPlatforms = isRG ? ['twitter', 'instagram', 'facebook', 'bluesky'] : ['twitter', 'instagram', 'facebook'];
+  const resolvedPlatforms = (requestedPlatforms && requestedPlatforms.length > 0) ? requestedPlatforms : allPlatforms;
   const SYSTEM_PROMPT = isRG ? RG_SYSTEM_PROMPT : INNAGO_SYSTEM_PROMPT;
   const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
   const brandLabel = isRG ? 'REI Grove' : 'Innago';
@@ -322,13 +322,13 @@ export default async function handler(req, res) {
 
   const twitterHookRule = `\nTWITTER HOOK VARIETY RULE: Do NOT start the Twitter post with any of these openings used in the past 14 days:\n${recentHooks.length > 0 ? recentHooks.map(h => `- "${h}"`).join('\n') : '(none yet)'}\nNever start more than 1 post per 14-day period with "most ${isRG ? 'investors' : 'landlords'}". Vary the hook pattern every post.`;
 
-  const needsUrl   = requestedPlatforms.filter(p => p !== 'instagram');
-  const needsNoUrl = requestedPlatforms.filter(p => p === 'instagram');
-  const platformCount = requestedPlatforms.length;
-  const outputKeys = requestedPlatforms.map(p => `"${p === 'twitter' ? 'twitter' : p}":"<post>"`).join(',');
+  const needsUrl   = resolvedPlatforms.filter(p => p !== 'instagram');
+  const needsNoUrl = resolvedPlatforms.filter(p => p === 'instagram');
+  const platformCount = resolvedPlatforms.length;
+  const outputKeys = resolvedPlatforms.map(p => `"${p === 'twitter' ? 'twitter' : p}":"<post>"`).join(',');
 
   const userPrompt = `Generate ${platformCount} platform-specific social media post${platformCount > 1 ? 's' : ''} for this ${brandLabel} article.
-Generate ONLY for these platforms: ${requestedPlatforms.join(', ')}.
+Generate ONLY for these platforms: ${resolvedPlatforms.join(', ')}.
 
 Title: ${title}
 URL: ${url}
@@ -338,9 +338,9 @@ ${needsUrl.length > 0 ? `Include the URL exactly (${url}) at the end of: ${needs
 ${needsNoUrl.length > 0 ? `Instagram caption must NOT include the URL — end with "${igFooter}" instead.` : ''}
 Only reference data or stats from 2025 or 2026. Ignore older figures.
 Do not write about password resets, account creation, or login pages.${boostedTopic ? `\n\nThis is part of a focused push on "${boostedTopic}" — frame each post accordingly.` : ''}
-${requestedPlatforms.includes('twitter') || requestedPlatforms.includes('bluesky') ? twitterHookRule : ''}
-${requestedPlatforms.includes('twitter') ? 'Remember: twitter must be 240 chars or fewer BEFORE the URL.' : ''}
-${requestedPlatforms.includes('bluesky') ? 'Remember: bluesky must be 240 chars or fewer BEFORE the URL.' : ''}
+${resolvedPlatforms.includes('twitter') || resolvedPlatforms.includes('bluesky') ? twitterHookRule : ''}
+${resolvedPlatforms.includes('twitter') ? 'Remember: twitter must be 240 chars or fewer BEFORE the URL.' : ''}
+${resolvedPlatforms.includes('bluesky') ? 'Remember: bluesky must be 240 chars or fewer BEFORE the URL.' : ''}
 Write each platform's post with a genuinely different hook and angle.
 
 OUTPUT FORMAT: Return ONLY valid JSON with exactly these keys — no others: {${outputKeys}}`;
@@ -367,7 +367,7 @@ OUTPUT FORMAT: Return ONLY valid JSON with exactly these keys — no others: {${
     return res.status(500).json({ error: 'Failed to generate post', detail: err.message });
   }
 
-  const has = p => requestedPlatforms.includes(p);
+  const has = p => resolvedPlatforms.includes(p);
   const result = { title, image_url };
 
   // Twitter

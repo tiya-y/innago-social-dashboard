@@ -515,11 +515,7 @@ export default function Dashboard() {
     setProgress({ done: 0, total: newPlan.length });
 
     const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    if (mappedPlatforms.length === 0) {
-      setError('No accounts mapped. Add account IDs in Settings before generating posts.');
-      setGenerating(false);
-      return;
-    }
+    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
 
     for (let i = 0; i < newPlan.length; i++) {
       if (abortRef.current) break;
@@ -529,7 +525,7 @@ export default function Dashboard() {
         const r = await fetch('/api/generate-post', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: mappedPlatforms }),
+          body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: platformsToGenerate }),
         });
         postData = await r.json();
         if (postData?.error) {
@@ -723,13 +719,13 @@ export default function Dashboard() {
 
   const regenerateSingle = async (slot) => {
     const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    if (mappedPlatforms.length === 0) { setError('No accounts mapped. Add account IDs in Settings before generating posts.'); return; }
+    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
     setRegeneratingId(slot.id);
     try {
       const r = await fetch('/api/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: mappedPlatforms }),
+        body: JSON.stringify({ url: slot.article.url, displayTitle: slot.article.displayTitle, description: slot.article.description || undefined, date: slot.date, boostedTopic: slot.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: platformsToGenerate }),
       });
       const postData = await r.json();
       setPosts(p => ({ ...p, [slot.id]: postData }));
@@ -756,13 +752,13 @@ export default function Dashboard() {
     if (!updatedSlot) return;
     const slotWithNewArticle = { ...updatedSlot, article: newArticle };
     const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    if (mappedPlatforms.length === 0) { setError('No accounts mapped. Add account IDs in Settings before generating posts.'); return; }
+    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
     setRegeneratingId(slotId);
     try {
       const r = await fetch('/api/generate-post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newArticle.url, displayTitle: newArticle.displayTitle, description: newArticle.description || undefined, date: slotWithNewArticle.date, boostedTopic: slotWithNewArticle.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: mappedPlatforms }),
+        body: JSON.stringify({ url: newArticle.url, displayTitle: newArticle.displayTitle, description: newArticle.description || undefined, date: slotWithNewArticle.date, boostedTopic: slotWithNewArticle.boostedTopic || undefined, recentTwitterHooks: twitterHooks, brand, platforms: platformsToGenerate }),
       });
       const postData = await r.json();
       setPosts(p => ({ ...p, [slotId]: postData }));
