@@ -13,12 +13,12 @@ const GREEN = '#16a34a';
 const RED = '#dc2626';
 const YELLOW = '#ca8a04';
 
-const PLATFORM_LABELS = { twitter: 'Twitter/X', instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn' };
-const PLATFORM_COLORS = { twitter: '#000', instagram: '#E1306C', facebook: '#1877F2', linkedin: '#0A66C2' };
+const PLATFORM_LABELS = { twitter: 'Twitter/X', instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', bluesky: 'Bluesky' };
+const PLATFORM_COLORS = { twitter: '#000', instagram: '#E1306C', facebook: '#1877F2', linkedin: '#0A66C2', bluesky: '#0085FF' };
 const INNAGO_PLATFORMS = ['twitter', 'instagram', 'facebook'];
-const RG_PLATFORMS     = ['twitter', 'instagram', 'facebook'];
-const POST_FIELD = { twitter: 'post_twitter_x', instagram: 'post_instagram', facebook: 'post_facebook', linkedin: 'post_linkedin' };
-const CHAR_LIMITS = { twitter: 280, instagram: 2200, facebook: 63206, linkedin: 3000, universal: null };
+const RG_PLATFORMS     = ['twitter', 'instagram', 'facebook', 'bluesky'];
+const POST_FIELD = { twitter: 'post_twitter_x', instagram: 'post_instagram', facebook: 'post_facebook', linkedin: 'post_linkedin', bluesky: 'post_bluesky' };
+const CHAR_LIMITS = { twitter: 280, instagram: 2200, facebook: 63206, linkedin: 3000, bluesky: 300, universal: null };
 const PLATFORMS_LIST = ['linkedin', 'twitter', 'instagram', 'facebook'];
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const TIME_OPTIONS = [
@@ -220,6 +220,7 @@ export default function Dashboard() {
     twitter:   { accountId: '', pageId: '' },
     instagram: { accountId: '', pageId: '' },
     facebook:  { accountId: '', pageId: '' },
+    bluesky:   { accountId: '', pageId: '' },
   });
   const [autoSchedule, setAutoSchedule] = useState(false);
 

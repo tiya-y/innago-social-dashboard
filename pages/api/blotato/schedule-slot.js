@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     instagram: 'post_instagram',
     facebook:  'post_facebook',
     linkedin:  'post_linkedin',
+    bluesky:   'post_bluesky',
   };
 
   // Platform → Blotato targetType
@@ -20,6 +21,7 @@ export default async function handler(req, res) {
     instagram: 'instagram',
     facebook:  'facebook',
     linkedin:  'linkedin',
+    bluesky:   'bluesky',
   };
 
   const results = {};
