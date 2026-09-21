@@ -1513,7 +1513,7 @@ export default function Dashboard() {
 
                 <Field label="Platforms">
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>
-                    {PLATFORMS_LIST.map(p => {
+                    {activePlatforms.filter(p => accountMapping[p]?.accountId).map(p => {
                       const on = recurForm.platforms.includes(p);
                       return (
                         <label key={p} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer',
@@ -2193,7 +2193,7 @@ export default function Dashboard() {
                   {/* Platform tabs (only in list view) */}
                   {reviewView === 'list' && (
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-                      {PLATFORMS_LIST.map(p=>(
+                      {activePlatforms.filter(p => accountMapping[p]?.accountId).map(p=>(
                         <button key={p} onClick={()=>setActivePlatform(p)} style={{
                           padding:'6px 16px', borderRadius:20, cursor:'pointer', fontSize:13,
                           border:`1.5px solid ${activePlatform===p?PLATFORM_COLORS[p]:BORDER}`,
