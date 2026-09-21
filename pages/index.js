@@ -488,7 +488,7 @@ export default function Dashboard() {
       if (isFirstOfWeek) weeksSeen.add(wk);
 
       // Enforce Instagram once per week
-      let platforms = slot.platforms || ['linkedin', 'twitter', 'instagram', 'facebook'];
+      let platforms = slot.platforms || activePlatforms;
       const slotWk = isoWeekKey(slot.date);
       if (platforms.includes('instagram')) {
         if (igWeeksSeen.has(slotWk)) {
@@ -605,7 +605,7 @@ export default function Dashboard() {
           slot: { date: slot.date, ...postData },
           accountMapping: Object.fromEntries(
             Object.entries(accountMapping).filter(([p, v]) =>
-              v.accountId && (!slot.platforms || slot.platforms.includes(p))
+              v.accountId && activePlatforms.includes(p)
             )
           ),
           postingTime: slot.time || '09:00',
