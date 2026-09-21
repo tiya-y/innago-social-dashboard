@@ -297,10 +297,12 @@ Rules: One sentence only. Keep the URL at the end. Stay under 240 chars before t
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { url, displayTitle, description: providedDescription, date, boostedTopic, recentTwitterHooks, brand } = req.body;
+  const { url, displayTitle, description: providedDescription, date, boostedTopic, recentTwitterHooks, brand, platforms: requestedPlatforms } = req.body;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const bitlyKey = process.env.BITLY_API_KEY;
   if (!url) return res.status(400).json({ error: 'url is required' });
+  if (!requestedPlatforms || requestedPlatforms.length === 0)
+    return res.status(400).json({ error: 'No accounts mapped. Add account IDs in Settings before generating posts.' });
 
   const isRG = brand === 'reigrove';
   const SYSTEM_PROMPT = isRG ? RG_SYSTEM_PROMPT : INNAGO_SYSTEM_PROMPT;
@@ -320,18 +322,28 @@ export default async function handler(req, res) {
 
   const twitterHookRule = `\nTWITTER HOOK VARIETY RULE: Do NOT start the Twitter post with any of these openings used in the past 14 days:\n${recentHooks.length > 0 ? recentHooks.map(h => `- "${h}"`).join('\n') : '(none yet)'}\nNever start more than 1 post per 14-day period with "most ${isRG ? 'investors' : 'landlords'}". Vary the hook pattern every post.`;
 
-  const userPrompt = `Generate 4 platform-specific social media posts for this ${brandLabel} article:
+  const needsUrl   = requestedPlatforms.filter(p => p !== 'instagram');
+  const needsNoUrl = requestedPlatforms.filter(p => p === 'instagram');
+  const platformCount = requestedPlatforms.length;
+  const outputKeys = requestedPlatforms.map(p => `"${p === 'twitter' ? 'twitter' : p}":"<post>"`).join(',');
+
+  const userPrompt = `Generate ${platformCount} platform-specific social media post${platformCount > 1 ? 's' : ''} for this ${brandLabel} article.
+Generate ONLY for these platforms: ${requestedPlatforms.join(', ')}.
 
 Title: ${title}
 URL: ${url}
 Summary: ${summary}
 
-Include the URL exactly (${url}) at the end of twitter, linkedin, and facebook posts.
-Instagram caption must NOT include the URL — end with "${igFooter}" instead.
+${needsUrl.length > 0 ? `Include the URL exactly (${url}) at the end of: ${needsUrl.join(', ')}.` : ''}
+${needsNoUrl.length > 0 ? `Instagram caption must NOT include the URL — end with "${igFooter}" instead.` : ''}
 Only reference data or stats from 2025 or 2026. Ignore older figures.
 Do not write about password resets, account creation, or login pages.${boostedTopic ? `\n\nThis is part of a focused push on "${boostedTopic}" — frame each post accordingly.` : ''}
-${twitterHookRule}
-Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform's post differently.`;
+${requestedPlatforms.includes('twitter') || requestedPlatforms.includes('bluesky') ? twitterHookRule : ''}
+${requestedPlatforms.includes('twitter') ? 'Remember: twitter must be 240 chars or fewer BEFORE the URL.' : ''}
+${requestedPlatforms.includes('bluesky') ? 'Remember: bluesky must be 240 chars or fewer BEFORE the URL.' : ''}
+Write each platform's post with a genuinely different hook and angle.
+
+OUTPUT FORMAT: Return ONLY valid JSON with exactly these keys — no others: {${outputKeys}}`;
 
   const client = new Anthropic({ apiKey: anthropicKey });
 
@@ -347,7 +359,7 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
     const raw = msg.content[0].text.trim()
       .replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
     posts = JSON.parse(raw);
-    for (const key of ['twitter', 'linkedin', 'facebook', 'instagram']) {
+    for (const key of Object.keys(posts)) {
       if (posts[key]) posts[key] = stripEmDashes(posts[key]);
     }
   } catch (err) {
@@ -355,58 +367,55 @@ Remember: twitter must be 240 chars or fewer BEFORE the URL. Write each platform
     return res.status(500).json({ error: 'Failed to generate post', detail: err.message });
   }
 
-  // Validate Twitter length — auto-retry once if over limit
-  let twitterPost = posts.twitter || '';
-  if (twitterTextLength(twitterPost, url) > 240) {
-    try {
-      twitterPost = await shortenTwitterPost(client, twitterPost, url, title, summary, boostedTopic);
-    } catch {
-      // Keep original if retry fails — the char count warning in the UI will flag it
+  const has = p => requestedPlatforms.includes(p);
+  const result = { title, image_url };
+
+  // Twitter
+  if (has('twitter')) {
+    let twitterPost = posts.twitter || '';
+    if (twitterTextLength(twitterPost, url) > 240) {
+      try { twitterPost = await shortenTwitterPost(client, twitterPost, url, title, summary, boostedTopic); } catch {}
     }
+    const twitterShortUrl = bitlyKey
+      ? await shortenWithBitly(tagUrl(url, 'twitter', date), bitlyKey)
+      : await shortenWithTinyUrl(tagUrl(url, 'twitter', date));
+    result.post_twitter_x = twitterPost.replace(url, twitterShortUrl);
   }
 
-  // Only shorten Twitter/Bluesky URLs (TinyURL fallback when no Bitly key)
-  // LinkedIn and Facebook use full UTM-tagged URLs
-  const linkedinUtmUrl  = tagUrl(url, 'linkedin', date);
-  const facebookUtmUrl  = tagUrl(url, 'facebook', date);
-  const twitterLong     = tagUrl(url, 'twitter',  date);
-  const blueskyLong     = tagUrl(url, 'bluesky',  date);
-  const twitterShortUrl = bitlyKey
-    ? await shortenWithBitly(twitterLong, bitlyKey)
-    : await shortenWithTinyUrl(twitterLong);
-  const blueskyShortUrl = bitlyKey
-    ? await shortenWithBitly(blueskyLong, bitlyKey)
-    : await shortenWithTinyUrl(blueskyLong);
-
-  const post_twitter_x = twitterPost.replace(url, twitterShortUrl);
-  const post_bluesky   = isRG ? (posts.bluesky || posts.twitter || twitterPost).replace(url, blueskyShortUrl) : '';
-  const post_linkedin  = (posts.linkedin  || posts.twitter || twitterPost).replace(url, linkedinUtmUrl);
-  const post_facebook  = (posts.facebook  || posts.linkedin || '').replace(url, facebookUtmUrl);
-
-  // Instagram: no URL in caption — remove any URL that slipped through, ensure "Link in bio." is present
-  let instagramCaption = posts.instagram || posts.linkedin || '';
-  // Strip any URL that Claude may have included anyway
-  instagramCaption = instagramCaption.replace(/https?:\/\/\S+/g, '').trim();
-  // Ensure it ends with the brand-specific footer
-  const igFooterLower = igFooter.toLowerCase();
-  if (!instagramCaption.toLowerCase().includes(igFooterLower.split('/').pop() || igFooterLower)) {
-    instagramCaption = instagramCaption + `\n\n${igFooter}`;
+  // Bluesky
+  if (has('bluesky')) {
+    let blueskyPost = posts.bluesky || posts.twitter || '';
+    const blueskyShortUrl = bitlyKey
+      ? await shortenWithBitly(tagUrl(url, 'bluesky', date), bitlyKey)
+      : await shortenWithTinyUrl(tagUrl(url, 'bluesky', date));
+    result.post_bluesky = blueskyPost.replace(url, blueskyShortUrl);
   }
-  const post_instagram = instagramCaption;
 
-  // Universal fallback = LinkedIn version (most complete)
-  const post = posts.linkedin || twitterPost;
+  // LinkedIn
+  if (has('linkedin')) {
+    result.post_linkedin = (posts.linkedin || posts.twitter || '').replace(url, tagUrl(url, 'linkedin', date));
+  }
 
-  res.status(200).json({
-    title,
-    image_url,
-    post,
-    post_linkedin,
-    post_facebook,
-    post_twitter_x,
-    post_bluesky,
-    post_instagram,
-  });
+  // Facebook
+  if (has('facebook')) {
+    result.post_facebook = (posts.facebook || posts.linkedin || posts.twitter || '').replace(url, tagUrl(url, 'facebook', date));
+  }
+
+  // Instagram
+  if (has('instagram')) {
+    let instagramCaption = posts.instagram || '';
+    instagramCaption = instagramCaption.replace(/https?:\/\/\S+/g, '').trim();
+    const igFooterLower = igFooter.toLowerCase();
+    if (!instagramCaption.toLowerCase().includes(igFooterLower.split('/').pop() || igFooterLower)) {
+      instagramCaption = instagramCaption + `\n\n${igFooter}`;
+    }
+    result.post_instagram = instagramCaption;
+  }
+
+  // Universal fallback for the "post" field (used as default copy)
+  result.post = result.post_linkedin || result.post_twitter_x || result.post_bluesky || result.post_facebook || '';
+
+  res.status(200).json(result);
 }
 
 export const config = { api: { bodyParser: true } };
