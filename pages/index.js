@@ -163,6 +163,8 @@ export default function Dashboard() {
           set('innago-custom-articles', v => setCustomArticles(v));
           set('innago-approved-posts',  v => setApprovedPosts(v));
           set('innago-linkedin-manual', v => setLinkedinManual(v));
+          set('innago-linkedin-batch-history', v => setLinkedinBatchHistory(v));
+          set('innago-active-batch-id', v => setActiveBatchId(v));
           set('innago-manual-done',     v => setManualDone(v));
           set('innago-image-feedback',  v => setImageFeedbackHistory(v));
           set('innago-twitter-hooks',   v => setTwitterHooks(v));
@@ -242,6 +244,8 @@ export default function Dashboard() {
   // path for it) — this tracks per-slot confirmation that the post was copied
   // into LinkedIn's own scheduler. slotId -> { confirmedAt }
   const [linkedinManual, setLinkedinManual] = useState({});
+  const [linkedinBatchHistory, setLinkedinBatchHistory] = useState([]); // [{batchId, archivedAt, rows}]
+  const [activeBatchId, setActiveBatchId] = useState(null); // batchId of the current live linkedin batch
   // Escape hatch for a slot that was actually published outside Blotato
   // (most commonly: its date already passed, and Blotato refuses to schedule
   // a post in the past) — lets it leave the Approve queue anyway.
@@ -431,6 +435,7 @@ export default function Dashboard() {
     setGenerating(true);
     abortRef.current = false;
     setTab('review');
+    const currentBatchId = uid(); // all slots in this generation run share one batch ID
 
     // Sort only the NEW slots by date + time
     const sorted = [...newCustomSlots].sort((a, b) => (a.date+a.time).localeCompare(b.date+b.time));
@@ -493,7 +498,7 @@ export default function Dashboard() {
         }
       }
 
-      return { ...slot, brand, platforms, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek };
+      return { ...slot, brand, platforms, day: dayNameFromStr(slot.date), article, boostedTopic: slot.topicOverride || '', isFirstOfWeek, batchId: currentBatchId };
     });
 
     // Save used URLs
@@ -780,6 +785,30 @@ export default function Dashboard() {
   const approvePost = (slotId, platforms) => {
     const slot = schedule?.find(s => s.id === slotId);
     const articleUrl = slot?.article?.url;
+
+    // LinkedIn batch management: when approving a LinkedIn slot from a new batch,
+    // archive the current active batch to history first.
+    if (platforms.includes('linkedin') && slot?.batchId && slot.batchId !== activeBatchId) {
+      // Archive the current active batch if it has any rows
+      if (activeBatchId) {
+        const currentBatchSlots = brandSchedule.filter(s =>
+          s.batchId === activeBatchId &&
+          (s.platforms || []).includes('linkedin') &&
+          posts[s.id] && !posts[s.id].error
+        );
+        if (currentBatchSlots.length > 0) {
+          const archivedRows = currentBatchSlots.map(s => {
+            const p = posts[s.id] || {};
+            return { date: s.date, time: s.time || '', title: p.title || s.article?.displayTitle || '', url: s.article?.url || '', post: p.post_linkedin || p.post || '' };
+          });
+          setLinkedinBatchHistory(prev => [...prev, { batchId: activeBatchId, archivedAt: new Date().toISOString(), rows: archivedRows }]);
+        }
+      }
+      setActiveBatchId(slot.batchId);
+    } else if (platforms.includes('linkedin') && slot?.batchId && activeBatchId === null) {
+      setActiveBatchId(slot.batchId);
+    }
+
     setApprovedPosts(prev => {
       const next = { ...prev, [slotId]: { platforms, approvedAt: new Date().toISOString() } };
       try { localStorage.setItem('innago-approved-posts', JSON.stringify(next)); } catch {}
@@ -909,6 +938,7 @@ export default function Dashboard() {
     .filter(slot => approvedPosts[slot.id]?.platforms?.includes('linkedin'))
     .filter(slot => !linkedinManual[slot.id]?.confirmedAt)
     .filter(slot => posts[slot.id] && !posts[slot.id].error)
+    .filter(slot => !activeBatchId || slot.batchId === activeBatchId)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const exportLinkedinBatchCSV = () => {
@@ -978,6 +1008,8 @@ export default function Dashboard() {
   useEffect(() => { syncToDb('innago-custom-articles', customArticles); }, [customArticles]);
   useEffect(() => { syncToDb('innago-approved-posts', approvedPosts); }, [approvedPosts]);
   useEffect(() => { syncToDb('innago-linkedin-manual', linkedinManual); }, [linkedinManual]);
+  useEffect(() => { syncToDb('innago-linkedin-batch-history', linkedinBatchHistory); }, [linkedinBatchHistory]);
+  useEffect(() => { syncToDb('innago-active-batch-id', activeBatchId); }, [activeBatchId]);
   useEffect(() => { syncToDb('innago-manual-done', manualDone); }, [manualDone]);
   useEffect(() => { syncToDb('innago-image-feedback', imageFeedbackHistory); }, [imageFeedbackHistory]);
   useEffect(() => { syncToDb('innago-twitter-hooks', twitterHooks); }, [twitterHooks]);
@@ -1833,9 +1865,52 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+
+            {/* LinkedIn Batch History */}
+            {linkedinBatchHistory.filter(b => b.rows?.length > 0).length > 0 && (
+              <div style={{ marginTop:32 }}>
+                <h3 style={{ fontSize:15, fontWeight:700, color:TEXT, margin:'0 0 14px' }}>
+                  LinkedIn Batch History
+                </h3>
+                {[...linkedinBatchHistory].reverse().map((batch, i) => {
+                  const downloadBatchCSV = () => {
+                    const headers = ['date', 'time', 'article_title', 'article_url', 'linkedin_post'];
+                    const rows = batch.rows.map(r =>
+                      [r.date, r.time, r.title, r.url, r.post]
+                        .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+                    );
+                    const BOM = String.fromCharCode(0xFEFF);
+                    const blob = new Blob([BOM + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
+                    const a = Object.assign(document.createElement('a'), {
+                      href: URL.createObjectURL(blob),
+                      download: `linkedin-batch-${batch.rows[0]?.date || 'archive'}.csv`,
+                    });
+                    a.click();
+                  };
+                  return (
+                    <div key={batch.batchId || i} style={{ marginBottom:12, padding:'12px 16px',
+                      background:'#fff', border:`1px solid ${BORDER}`, borderLeft:`4px solid ${PLATFORM_COLORS.linkedin}`,
+                      borderRadius:10, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                      <div>
+                        <span style={{ fontWeight:600, fontSize:13, color:PLATFORM_COLORS.linkedin }}>
+                          Batch — {batch.rows[0]?.date} to {batch.rows[batch.rows.length-1]?.date}
+                        </span>
+                        <span style={{ marginLeft:10, fontSize:12, color:MUTED }}>
+                          {batch.rows.length} post{batch.rows.length !== 1 ? 's' : ''} · archived {new Date(batch.archivedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <button onClick={downloadBatchCSV}
+                        style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
+                        ⬇ Download CSV
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             </div>
           );
-        })()}
+        })()}  {/* end library tab */}
 
         {/* ══ SETTINGS TAB ════════════════════════ */}
         {tab==='blotato' && (
