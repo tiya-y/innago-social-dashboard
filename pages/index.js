@@ -322,15 +322,6 @@ export default function Dashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load accounts');
       setAccounts(data.accounts);
-      setAccountMapping(prev => {
-        const mapping = { ...prev };
-        for (const [platform, items] of Object.entries(data.accounts)) {
-          if (items.length > 0 && !mapping[platform]?.accountId) {
-            mapping[platform] = { accountId: items[0].accountId, pageId: items[0].pages?.[0]?.pageId || '' };
-          }
-        }
-        return mapping;
-      });
     } catch (e) {
       setAccountsError(e.message);
     } finally {
