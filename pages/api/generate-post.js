@@ -104,6 +104,9 @@ OUTPUT FORMAT: Return ONLY valid JSON with exactly these 4 keys. No explanation,
 const RG_SYSTEM_PROMPT = `You write platform-specific social media posts for REI Grove, a real estate investor education and community platform.
 ${RG_BRAND_RULES}
 
+CONTENT ACCESS FRAMING (apply to every post for gated content):
+Most REI Grove content — podcasts, webinars, tools, calculators, spreadsheets, eBooks, checklists, and data reports — is available exclusively to REI Grove+ members. Posts must tease what the content covers and what the reader will walk away knowing, then drive them to join at the URL. Do NOT frame posts as "check this out" or "this resource exists." Frame them as: here is a real insight or result from this content, and getting the full thing requires joining REI Grove+. The URL in posts for gated content goes to the REI Grove+ signup page. "The Breakdown" articles are publicly accessible and posts should link directly to the article.
+
 PLATFORM-SPECIFIC RULES:
   twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
   bluesky:   Same rules as Twitter. HARD LIMIT — text before the URL must be 240 characters or fewer. One sentence only. Ruthlessly concise. Different angle from the Twitter post.
@@ -309,6 +312,11 @@ export default async function handler(req, res) {
   const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
   const brandLabel = isRG ? 'REI Grove' : 'Innago';
 
+  // For REI Grove: gated content links to the $1 trial page, not the resource itself.
+  // "The Breakdown" articles are publicly accessible and keep their own URL.
+  const isRGGated = isRG && !url.includes('/the-breakdown/');
+  const postUrl = isRGGated ? 'https://reigrove.com/plus/' : url;
+
   // Fetch article metadata — skip scrape if a description was provided (e.g. REI Grove assets)
   const meta = providedDescription ? null : await fetchArticleMeta(url);
   const title = meta?.title || displayTitle || url;
@@ -331,10 +339,10 @@ export default async function handler(req, res) {
 Generate ONLY for these platforms: ${resolvedPlatforms.join(', ')}.
 
 Title: ${title}
-URL: ${url}
+URL: ${postUrl}
 Summary: ${summary}
-
-${needsUrl.length > 0 ? `Include the URL exactly (${url}) at the end of: ${needsUrl.join(', ')}.` : ''}
+${isRGGated ? `\nThis is gated REI Grove+ member content. Write posts that tease the insight and drive viewers to join at ${postUrl}.` : ''}
+${needsUrl.length > 0 ? `Include the URL exactly (${postUrl}) at the end of: ${needsUrl.join(', ')}.` : ''}
 ${needsNoUrl.length > 0 ? `Instagram caption must NOT include the URL — end with "${igFooter}" instead.` : ''}
 Only reference data or stats from 2025 or 2026. Ignore older figures.
 Do not write about password resets, account creation, or login pages.${boostedTopic ? `\n\nThis is part of a focused push on "${boostedTopic}" — frame each post accordingly.` : ''}
@@ -373,32 +381,32 @@ OUTPUT FORMAT: Return ONLY valid JSON with exactly these keys — no others: {${
   // Twitter
   if (has('twitter')) {
     let twitterPost = posts.twitter || '';
-    if (twitterTextLength(twitterPost, url) > 240) {
-      try { twitterPost = await shortenTwitterPost(client, twitterPost, url, title, summary, boostedTopic); } catch {}
+    if (twitterTextLength(twitterPost, postUrl) > 240) {
+      try { twitterPost = await shortenTwitterPost(client, twitterPost, postUrl, title, summary, boostedTopic); } catch {}
     }
     const twitterShortUrl = bitlyKey
-      ? await shortenWithBitly(tagUrl(url, 'twitter', date), bitlyKey)
-      : await shortenWithTinyUrl(tagUrl(url, 'twitter', date));
-    result.post_twitter_x = twitterPost.replace(url, twitterShortUrl);
+      ? await shortenWithBitly(tagUrl(postUrl, 'twitter', date), bitlyKey)
+      : await shortenWithTinyUrl(tagUrl(postUrl, 'twitter', date));
+    result.post_twitter_x = twitterPost.replace(postUrl, twitterShortUrl);
   }
 
   // Bluesky
   if (has('bluesky')) {
     let blueskyPost = posts.bluesky || posts.twitter || '';
     const blueskyShortUrl = bitlyKey
-      ? await shortenWithBitly(tagUrl(url, 'bluesky', date), bitlyKey)
-      : await shortenWithTinyUrl(tagUrl(url, 'bluesky', date));
-    result.post_bluesky = blueskyPost.replace(url, blueskyShortUrl);
+      ? await shortenWithBitly(tagUrl(postUrl, 'bluesky', date), bitlyKey)
+      : await shortenWithTinyUrl(tagUrl(postUrl, 'bluesky', date));
+    result.post_bluesky = blueskyPost.replace(postUrl, blueskyShortUrl);
   }
 
   // LinkedIn
   if (has('linkedin')) {
-    result.post_linkedin = (posts.linkedin || posts.twitter || '').replace(url, tagUrl(url, 'linkedin', date));
+    result.post_linkedin = (posts.linkedin || posts.twitter || '').replace(postUrl, tagUrl(postUrl, 'linkedin', date));
   }
 
   // Facebook
   if (has('facebook')) {
-    result.post_facebook = (posts.facebook || posts.linkedin || posts.twitter || '').replace(url, tagUrl(url, 'facebook', date));
+    result.post_facebook = (posts.facebook || posts.linkedin || posts.twitter || '').replace(postUrl, tagUrl(postUrl, 'facebook', date));
   }
 
   // Instagram
