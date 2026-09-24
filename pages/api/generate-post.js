@@ -105,19 +105,18 @@ const RG_SYSTEM_PROMPT = `You write platform-specific social media posts for REI
 ${RG_BRAND_RULES}
 
 CONTENT ACCESS FRAMING (apply to every post):
-All REI Grove content — articles, podcasts, webinars, tools, calculators, spreadsheets, eBooks, checklists, and data reports — lives behind the REI Grove login. Every post must tease what the content covers and what the reader will walk away knowing, then drive them to reigrove.com to sign up and access it. Do NOT frame posts as "check this out" or "this resource exists." Frame them as: here is a real insight or result from this content, and getting the full thing requires joining REI Grove. The URL in every REI Grove post is reigrove.com.
+All REI Grove content lives behind the REI Grove login. Every post must tease the specific insight or result from the content, then end with a CTA using the phrase "access these resources here" followed by the URL. Do NOT say "check this out" or "this resource exists." Give a real, concrete takeaway, then drive them to reigrove.com to access it.
 
 PLATFORM-SPECIFIC RULES:
-  twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
-  bluesky:   Same rules as Twitter. HARD LIMIT — text before the URL must be 240 characters or fewer. One sentence only. Ruthlessly concise. Different angle from the Twitter post.
+  twitter:   HARD LIMIT -- text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
+  bluesky:   Same rules as Twitter. HARD LIMIT -- text before the URL must be 240 characters or fewer. One sentence only. Ruthlessly concise. Different angle from the Twitter post.
   linkedin:  1-3 sentences before the URL. Investor-focused authority voice. Audience: independent real estate investors, landlords scaling portfolios. More context is fine here.
   facebook:  1-2 sentences before the URL. Conversational and grounded. Community feel. Slightly less formal than LinkedIn.
-  instagram: 1-2 sentences. Visual-first hook — opening words must grab immediately. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Read more at reigrove.com" on its own line. Instagram does not support clickable links in captions.
+  instagram: 1-2 sentences. Visual-first hook. Warmer and more punchy. IMPORTANT: Do NOT include any URL. End the caption with "Access these resources at reigrove.com" on its own line.
 
-Each platform's post must be genuinely different — different hook, different angle, different length. Not the same sentence reworded.
+Each platform's post must be genuinely different -- different hook, different angle, different length. Not the same sentence reworded.
 
-OUTPUT FORMAT: Return ONLY valid JSON with exactly these 5 keys. No explanation, no markdown fences:
-{"twitter":"<post text including bare URL at end>","bluesky":"<post text including bare URL at end>","linkedin":"<post text including bare URL at end>","facebook":"<post text including bare URL at end>","instagram":"<caption text ending with Read more at reigrove.com — NO URL>"}`;
+Generate ONLY for the platforms listed in the user message. Return ONLY those keys in the JSON -- no extras.`;
 
 // ── UTM tagging ───────────────────────────────────────────────
 function tagUrl(baseUrl, platform, date) {
@@ -306,10 +305,10 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   const isRG = brand === 'reigrove';
-  const allPlatforms = isRG ? ['twitter', 'instagram', 'facebook', 'bluesky'] : ['twitter', 'instagram', 'facebook'];
+  const allPlatforms = isRG ? ['linkedin', 'facebook', 'bluesky'] : ['twitter', 'instagram', 'facebook'];
   const resolvedPlatforms = (requestedPlatforms && requestedPlatforms.length > 0) ? requestedPlatforms : allPlatforms;
   const SYSTEM_PROMPT = isRG ? RG_SYSTEM_PROMPT : INNAGO_SYSTEM_PROMPT;
-  const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
+  const igFooter = isRG ? 'Access these resources at reigrove.com' : 'Read more at innago.com/blog';
   const brandLabel = isRG ? 'REI Grove' : 'Innago';
 
   // All REI Grove posts link to reigrove.com — everything beyond the homepage is behind login.
