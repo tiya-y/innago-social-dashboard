@@ -521,12 +521,14 @@ export default function Dashboard() {
     setSchedule(mergedSchedule);
     setProgress({ done: 0, total: newPlan.length });
 
-    const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
-
     for (let i = 0; i < newPlan.length; i++) {
       if (abortRef.current) break;
       const slot = newPlan[i];
+      // Use only the platforms selected for this slot that also have an account mapped.
+      // Fall back to all mapped platforms if the slot has no platform list.
+      const slotPlatforms = slot.platforms?.length > 0 ? slot.platforms : activePlatforms;
+      const mapped = slotPlatforms.filter(p => accountMapping[p]?.accountId);
+      const platformsToGenerate = mapped.length > 0 ? mapped : slotPlatforms;
       let postData = null;
       try {
         const r = await fetch('/api/generate-post', {
@@ -725,8 +727,9 @@ export default function Dashboard() {
   };
 
   const regenerateSingle = async (slot) => {
-    const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
+    const slotPlatforms = slot.platforms?.length > 0 ? slot.platforms : activePlatforms;
+    const mapped = slotPlatforms.filter(p => accountMapping[p]?.accountId);
+    const platformsToGenerate = mapped.length > 0 ? mapped : slotPlatforms;
     setRegeneratingId(slot.id);
     try {
       const r = await fetch('/api/generate-post', {
@@ -758,8 +761,9 @@ export default function Dashboard() {
     const updatedSlot = schedule.find(s => s.id === slotId);
     if (!updatedSlot) return;
     const slotWithNewArticle = { ...updatedSlot, article: newArticle };
-    const mappedPlatforms = activePlatforms.filter(p => accountMapping[p]?.accountId);
-    const platformsToGenerate = mappedPlatforms.length > 0 ? mappedPlatforms : activePlatforms;
+    const slotPlatforms = slotWithNewArticle.platforms?.length > 0 ? slotWithNewArticle.platforms : activePlatforms;
+    const mapped = slotPlatforms.filter(p => accountMapping[p]?.accountId);
+    const platformsToGenerate = mapped.length > 0 ? mapped : slotPlatforms;
     setRegeneratingId(slotId);
     try {
       const r = await fetch('/api/generate-post', {
