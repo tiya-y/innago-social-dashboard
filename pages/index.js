@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { CATEGORIES, ALL_ARTICLES } from '../lib/articles';
 import { RG_CATEGORIES, RG_ALL_ARTICLES } from '../lib/reigrove-articles';
 
@@ -942,24 +943,23 @@ export default function Dashboard() {
     .filter(slot => !activeBatchId || slot.batchId === activeBatchId)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const exportLinkedinBatchCSV = () => {
+  const exportLinkedinBatchXLSX = () => {
     if (linkedinBatchRows.length === 0) return;
-    const headers = ['date', 'time', 'article_title', 'article_url', 'linkedin_post'];
-    const rows = linkedinBatchRows.map(slot => {
+    const data = linkedinBatchRows.map(slot => {
       const p = posts[slot.id] || {};
-      return [
-        slot.date, slot.time || '',
-        p.title || slot.article?.displayTitle || '', slot.article?.url || '',
-        p.post_linkedin || p.post || '',
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+      return {
+        Date: slot.date,
+        Time: slot.time || '',
+        'Article Title': p.title || slot.article?.displayTitle || '',
+        'Article URL': slot.article?.url || '',
+        'LinkedIn Post': p.post_linkedin || p.post || '',
+      };
     });
-    const BOM = String.fromCharCode(0xFEFF);
-    const blob = new Blob([BOM + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: `linkedin-batch-${linkedinBatchRows[0]?.date || today()}.csv`,
-    });
-    a.click();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 40 }, { wch: 50 }, { wch: 80 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'LinkedIn Posts');
+    XLSX.writeFile(wb, `linkedin-batch-${linkedinBatchRows[0]?.date || today()}.xlsx`);
   };
 
   // ── Scroll to highlighted slot in Review tab ─
@@ -1874,19 +1874,19 @@ export default function Dashboard() {
                   LinkedIn Batch History
                 </h3>
                 {[...linkedinBatchHistory].reverse().map((batch, i) => {
-                  const downloadBatchCSV = () => {
-                    const headers = ['date', 'time', 'article_title', 'article_url', 'linkedin_post'];
-                    const rows = batch.rows.map(r =>
-                      [r.date, r.time, r.title, r.url, r.post]
-                        .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-                    );
-                    const BOM = String.fromCharCode(0xFEFF);
-                    const blob = new Blob([BOM + [headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
-                    const a = Object.assign(document.createElement('a'), {
-                      href: URL.createObjectURL(blob),
-                      download: `linkedin-batch-${batch.rows[0]?.date || 'archive'}.csv`,
-                    });
-                    a.click();
+                  const downloadBatchXLSX = () => {
+                    const data = batch.rows.map(r => ({
+                      Date: r.date,
+                      Time: r.time,
+                      'Article Title': r.title,
+                      'Article URL': r.url,
+                      'LinkedIn Post': r.post,
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 40 }, { wch: 50 }, { wch: 80 }];
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'LinkedIn Posts');
+                    XLSX.writeFile(wb, `linkedin-batch-${batch.rows[0]?.date || 'archive'}.xlsx`);
                   };
                   return (
                     <div key={batch.batchId || i} style={{ marginBottom:12, padding:'12px 16px',
@@ -1900,9 +1900,9 @@ export default function Dashboard() {
                           {batch.rows.length} post{batch.rows.length !== 1 ? 's' : ''} · archived {new Date(batch.archivedAt).toLocaleDateString()}
                         </span>
                       </div>
-                      <button onClick={downloadBatchCSV}
+                      <button onClick={downloadBatchXLSX}
                         style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
-                        ⬇ Download CSV
+                        ⬇ Download Excel
                       </button>
                     </div>
                   );
@@ -2209,9 +2209,9 @@ export default function Dashboard() {
                         </span>
                       </div>
                       <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={exportLinkedinBatchCSV}
+                        <button onClick={exportLinkedinBatchXLSX}
                           style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
-                          ⬇ Download CSV
+                          ⬇ Download Excel
                         </button>
                         <button onClick={()=>linkedinBatchRows.forEach(slot=>confirmLinkedinCopied(slot.id))}
                           title="Use once the whole batch has actually been posted to LinkedIn"
