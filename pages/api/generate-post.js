@@ -104,8 +104,8 @@ OUTPUT FORMAT: Return ONLY valid JSON with exactly these 4 keys. No explanation,
 const RG_SYSTEM_PROMPT = `You write platform-specific social media posts for REI Grove, a real estate investor education and community platform.
 ${RG_BRAND_RULES}
 
-CONTENT ACCESS FRAMING (apply to every post for gated content):
-Most REI Grove content — podcasts, webinars, tools, calculators, spreadsheets, eBooks, checklists, and data reports — is available exclusively to REI Grove+ members. Posts must tease what the content covers and what the reader will walk away knowing, then drive them to join at the URL. Do NOT frame posts as "check this out" or "this resource exists." Frame them as: here is a real insight or result from this content, and getting the full thing requires joining REI Grove+. The URL in posts for gated content goes to the REI Grove+ signup page. "The Breakdown" articles are publicly accessible and posts should link directly to the article.
+CONTENT ACCESS FRAMING (apply to every post):
+All REI Grove content — articles, podcasts, webinars, tools, calculators, spreadsheets, eBooks, checklists, and data reports — lives behind the REI Grove login. Every post must tease what the content covers and what the reader will walk away knowing, then drive them to reigrove.com to sign up and access it. Do NOT frame posts as "check this out" or "this resource exists." Frame them as: here is a real insight or result from this content, and getting the full thing requires joining REI Grove. The URL in every REI Grove post is reigrove.com.
 
 PLATFORM-SPECIFIC RULES:
   twitter:   HARD LIMIT — text before the URL must be 240 characters or fewer (URL takes ~23 chars for a total of 280). One sentence only. Be ruthlessly concise. Every word must earn its place.
@@ -312,10 +312,9 @@ export default async function handler(req, res) {
   const igFooter = isRG ? 'Read more at reigrove.com' : 'Read more at innago.com/blog';
   const brandLabel = isRG ? 'REI Grove' : 'Innago';
 
-  // For REI Grove: gated content links to the $1 trial page, not the resource itself.
-  // "The Breakdown" articles are publicly accessible and keep their own URL.
-  const isRGGated = isRG && !url.includes('/the-breakdown/');
-  const postUrl = isRGGated ? 'https://reigrove.com/plus/' : url;
+  // All REI Grove posts link to reigrove.com — everything beyond the homepage is behind login.
+  const isRGGated = isRG;
+  const postUrl = isRG ? 'https://reigrove.com' : url;
 
   // Fetch article metadata — skip scrape if a description was provided (e.g. REI Grove assets)
   const meta = providedDescription ? null : await fetchArticleMeta(url);
@@ -399,9 +398,10 @@ OUTPUT FORMAT: Return ONLY valid JSON with exactly these keys — no others: {${
     result.post_bluesky = blueskyPost.replace(postUrl, blueskyShortUrl);
   }
 
-  // LinkedIn
+  // LinkedIn — never shorten; keep full UTM-tagged URL
   if (has('linkedin')) {
-    result.post_linkedin = (posts.linkedin || posts.twitter || '').replace(postUrl, tagUrl(postUrl, 'linkedin', date));
+    const linkedinUrl = tagUrl(postUrl, 'linkedin', date);
+    result.post_linkedin = (posts.linkedin || posts.twitter || '').replace(postUrl, linkedinUrl);
   }
 
   // Facebook
