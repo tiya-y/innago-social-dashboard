@@ -20,7 +20,7 @@ const INNAGO_PLATFORMS = ['twitter', 'instagram', 'facebook'];
 const RG_PLATFORMS     = ['linkedin', 'facebook', 'bluesky'];
 const POST_FIELD = { twitter: 'post_twitter_x', instagram: 'post_instagram', facebook: 'post_facebook', linkedin: 'post_linkedin', bluesky: 'post_bluesky' };
 const CHAR_LIMITS = { twitter: 280, instagram: 2200, facebook: 63206, linkedin: 3000, bluesky: 300, universal: null };
-const PLATFORMS_LIST = ['linkedin', 'twitter', 'instagram', 'facebook'];
+const PLATFORMS_LIST = ['linkedin', 'twitter', 'instagram', 'facebook', 'bluesky'];
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const TIME_OPTIONS = [
   '06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30',
@@ -1838,6 +1838,7 @@ export default function Dashboard() {
                             {[
                               ['LinkedIn', 'post_linkedin', 'linkedin'],
                               ['Twitter/X', 'post_twitter_x', 'twitter'],
+                              ['Bluesky', 'post_bluesky', 'bluesky'],
                               ['Facebook', 'post_facebook', 'facebook'],
                               ['Instagram', 'post_instagram', 'instagram'],
                             ].filter(([,field]) => post[field]).map(([label, field, pl]) => (
@@ -2375,7 +2376,7 @@ export default function Dashboard() {
                                         {isScheduled?'✓ Queued':hasPost?'Draft':'Pending'}
                                       </div>
                                       <div style={{ display:'flex', gap:2, marginTop:1, flexWrap:'wrap' }}>
-                                        {(slot.platforms||PLATFORMS_LIST).map(pl=>(
+                                        {(slot.platforms||activePlatforms).filter(pl=>activePlatforms.includes(pl)).map(pl=>(
                                           <span key={pl} style={{ width:5, height:5, borderRadius:'50%',
                                             background:PLATFORM_COLORS[pl], display:'inline-block' }} />
                                         ))}
@@ -2408,7 +2409,7 @@ export default function Dashboard() {
                                   {d.toLocaleString('default',{month:'short'})} {d.getDate()}
                                 </div>
                                 {daySlots.flatMap(slot=>
-                                  (slot.platforms||PLATFORMS_LIST).map(platform=>({ slot, platform }))
+                                  (slot.platforms||activePlatforms).filter(pl=>activePlatforms.includes(pl)).map(platform=>({ slot, platform }))
                                 ).map(({slot,platform})=>{
                                   const p=posts[slot.id];
                                   const isScheduled=isPlatformDone(slot, platform);
@@ -2455,7 +2456,7 @@ export default function Dashboard() {
                     const overLimit=charLimit&&charCount>charLimit;
                     const nearLimit=charLimit&&charCount>charLimit*0.9&&!overLimit;
                     const isCopied=copiedKey===ek;
-                    const platformIncluded = activePlatform==='universal' || !slot.platforms || slot.platforms.includes(activePlatform);
+                    const platformIncluded = activePlatform==='universal' || slotDisplayPlatforms.includes(activePlatform);
 
                     // Image logic per Python script:
                     //   Instagram: always show
@@ -2475,7 +2476,8 @@ export default function Dashboard() {
                     const showAiImage = hasAiImage && activePlatform !== 'twitter';
 
                     const slotApproved = approvedPosts[slot.id];
-                    const allPlatformsApproved = slotApproved && (slot.platforms || PLATFORMS_LIST).every(pl => (slotApproved.platforms || []).includes(pl));
+                    const slotDisplayPlatforms = (slot.platforms || activePlatforms).filter(pl => activePlatforms.includes(pl));
+                    const allPlatformsApproved = slotApproved && slotDisplayPlatforms.every(pl => (slotApproved.platforms || []).includes(pl));
 
                     return (
                       <div key={slot.id} id={`slot-card-${slot.id}`} style={{
@@ -2498,7 +2500,7 @@ export default function Dashboard() {
                             )}
                             <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:5 }}>
                               {/* Platform badges for this slot */}
-                              {(slot.platforms||PLATFORMS_LIST).map(pl=>(
+                              {slotDisplayPlatforms.map(pl=>(
                                 <span key={pl} style={{ display:'inline-flex', alignItems:'center', gap:4,
                                   fontSize:11, padding:'2px 7px', borderRadius:8,
                                   background: PLATFORM_COLORS[pl]+'18', color:PLATFORM_COLORS[pl], fontWeight:600 }}>
@@ -2744,7 +2746,7 @@ export default function Dashboard() {
                         {/* Universal view — stacked per-platform posts with per-platform editing */}
                         {activePlatform === 'universal' && p && !p.error && !isLoading && (
                           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                            {PLATFORMS_LIST.filter(pl => !slot.platforms || slot.platforms.includes(pl)).map(pl => {
+                            {activePlatforms.filter(pl => !slot.platforms || slot.platforms.includes(pl)).map(pl => {
                               const plField = POST_FIELD[pl];
                               const plText = p[plField] || p.post || '';
                               const plLimit = CHAR_LIMITS[pl];
