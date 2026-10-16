@@ -557,8 +557,9 @@ export default function Dashboard() {
         setProgress({ done: i + 1, total: newPlan.length });
         continue;
       }
-      // Auto-generate image for Instagram slots
+      // Auto-generate image for Instagram slots (never for REI Grove — no Instagram)
       const needsImage = postData && !postData.error &&
+        slot.brand !== 'reigrove' &&
         (!slot.platforms || slot.platforms.includes('instagram'));
       if (needsImage) {
         setGeneratedImages(prev => ({ ...prev, [slot.id]: { html: '', loading: true } }));
@@ -2199,76 +2200,6 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* LinkedIn Batch — approved LinkedIn posts, downloadable as CSV for manual scheduling */}
-                {!generating && linkedinBatchRows.length > 0 && (
-                  <div style={{ marginBottom:20, padding:'14px 18px', background:'#fff',
-                    border:`1px solid ${BORDER}`, borderLeft:`4px solid ${PLATFORM_COLORS.linkedin}`, borderRadius:10 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-                      marginBottom:10, flexWrap:'wrap', gap:8 }}>
-                      <div>
-                        <span style={{ fontWeight:700, fontSize:14, color:PLATFORM_COLORS.linkedin }}>
-                          LinkedIn Batch
-                        </span>
-                        <span style={{ marginLeft:8, fontSize:13, color:MUTED }}>
-                          {linkedinBatchRows.length} approved post{linkedinBatchRows.length!==1?'s':''} ready to schedule manually
-                        </span>
-                      </div>
-                      <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={exportLinkedinBatchXLSX}
-                          style={{ ...outlineBtn, fontSize:12, color:PLATFORM_COLORS.linkedin, borderColor:PLATFORM_COLORS.linkedin }}>
-                          ⬇ Download Excel
-                        </button>
-                        <button onClick={()=>linkedinBatchRows.forEach(slot=>confirmLinkedinCopied(slot.id))}
-                          title="Use once the whole batch has actually been posted to LinkedIn"
-                          style={{ ...outlineBtn, fontSize:12, color:GREEN, borderColor:GREEN }}>
-                          ✓ Mark All as Copied
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ overflowX:'auto' }}>
-                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                        <thead>
-                          <tr style={{ textAlign:'left', color:MUTED, borderBottom:`1px solid ${BORDER}` }}>
-                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Date</th>
-                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Time</th>
-                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Article</th>
-                            <th style={{ padding:'4px 8px', fontWeight:600 }}>Post</th>
-                            <th style={{ padding:'4px 8px', fontWeight:600 }}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {linkedinBatchRows.map(slot => {
-                            const p = posts[slot.id];
-                            const text = p?.post_linkedin || p?.post || '';
-                            return (
-                              <tr key={slot.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap', color:TEXT }}>{slot.date}</td>
-                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap', color:MUTED }}>{slot.time}</td>
-                                <td style={{ padding:'6px 8px', maxWidth:180, overflow:'hidden',
-                                  textOverflow:'ellipsis', whiteSpace:'nowrap', color:TEXT }}>
-                                  {p?.title || slot.article?.displayTitle}
-                                </td>
-                                <td style={{ padding:'6px 8px', maxWidth:340, overflow:'hidden',
-                                  textOverflow:'ellipsis', whiteSpace:'nowrap', color:MUTED }}
-                                  title={text}>
-                                  {text}
-                                </td>
-                                <td style={{ padding:'6px 8px', whiteSpace:'nowrap' }}>
-                                  <button onClick={()=>confirmLinkedinCopied(slot.id)}
-                                    style={{ background:'none', border:'none', cursor:'pointer', fontSize:12,
-                                      color:PLATFORM_COLORS.linkedin, fontWeight:600 }}>
-                                    ✓ Copied
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
                 {/* View toggle + platform tabs row */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
                   {/* Platform tabs (only in list view) */}
@@ -2581,7 +2512,7 @@ export default function Dashboard() {
                               Mark as fully posted
                             </button>
 
-                            {p && !p.error && !isLoading && (
+                            {p && !p.error && !isLoading && slot.brand !== 'reigrove' && (
                               <button onClick={()=> hasAiImage ? setImgFeedbackSlotId(slot.id) : generateImage(slot)}
                                 disabled={!!imgEntry?.loading}
                                 title="Generate AI branded image"
@@ -2593,7 +2524,10 @@ export default function Dashboard() {
 
                             {p && !p.error && !isLoading && platformIncluded && (
                               <>
-                                <button onClick={()=>copyPost(slot.id,field,postText)}
+                                <button onClick={()=>{
+                                  copyPost(slot.id,field,postText);
+                                  if (activePlatform === 'linkedin') confirmLinkedinCopied(slot.id);
+                                }}
                                   style={{ ...outlineBtn, fontSize:12, padding:'5px 10px',
                                     color:isCopied?GREEN:undefined, borderColor:isCopied?GREEN:undefined }}>
                                   {isCopied?'Copied':'Copy'}
@@ -2602,27 +2536,14 @@ export default function Dashboard() {
                                   style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', opacity:generating?0.5:1 }}>
                                   Regenerate
                                 </button>
-                                {activePlatform === 'linkedin' ? (
-                                  linkedinManual[slot.id]?.confirmedAt ? (
-                                    <span style={{ fontSize:12, color:GREEN, fontWeight:600, padding:'5px 10px' }}>
-                                      ✓ Scheduled in LinkedIn
-                                    </span>
-                                  ) : (
-                                    <button onClick={()=>confirmLinkedinCopied(slot.id)}
-                                      style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:'#0A66C2', borderColor:'#0A66C2' }}>
-                                      ✓ Copied to LinkedIn
-                                    </button>
-                                  )
-                                ) : (
-                                  blotatoReady && !slotStatus?._loading && (
-                                    <button onClick={async()=>{
-                                      setScheduleStatus(prev=>({...prev,[slot.id]:{_loading:true}}));
-                                      const r=await scheduleSlot(slot.id,p);
-                                      setScheduleStatus(prev=>({...prev,[slot.id]:r}));
-                                    }} style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:BLUE, borderColor:BLUE }}>
-                                      {slotStatus ? 'Reschedule' : 'Schedule to Blotato'}
-                                    </button>
-                                  )
+                                {activePlatform !== 'linkedin' && blotatoReady && !slotStatus?._loading && (
+                                  <button onClick={async()=>{
+                                    setScheduleStatus(prev=>({...prev,[slot.id]:{_loading:true}}));
+                                    const r=await scheduleSlot(slot.id,p);
+                                    setScheduleStatus(prev=>({...prev,[slot.id]:r}));
+                                  }} style={{ ...outlineBtn, fontSize:12, padding:'5px 10px', color:BLUE, borderColor:BLUE }}>
+                                    {slotStatus ? 'Reschedule' : 'Schedule to Blotato'}
+                                  </button>
                                 )}
                                 <button onClick={()=>isEditing?saveEdit(slot.id,field):startEdit(slot.id,field)}
                                   style={{ ...outlineBtn, fontSize:12, padding:'5px 10px',
@@ -2773,7 +2694,10 @@ export default function Dashboard() {
                                           {plCount}/{plLimit}{plOver && ` (+${plCount-plLimit} over)`}
                                         </span>
                                       )}
-                                      <button onClick={()=>copyPost(slot.id, plField, plText)}
+                                      <button onClick={()=>{
+                                        copyPost(slot.id, plField, plText);
+                                        if (pl === 'linkedin') confirmLinkedinCopied(slot.id);
+                                      }}
                                         style={{ background:'none', border:'none', cursor:'pointer',
                                           fontSize:12, color:plCopied?GREEN:MUTED, padding:'2px 6px' }}>
                                         {plCopied ? '✓ Copied' : 'Copy'}
@@ -2791,19 +2715,6 @@ export default function Dashboard() {
                                             fontSize:12, color:GREEN, padding:'2px 6px', fontWeight:600 }}>
                                           ✓ Approve
                                         </button>
-                                      )}
-                                      {pl === 'linkedin' && (
-                                        linkedinManual[slot.id]?.confirmedAt ? (
-                                          <span style={{ fontSize:11, color:PLATFORM_COLORS.linkedin, fontWeight:600, padding:'2px 6px' }}>
-                                            ✓ Copied to LinkedIn
-                                          </span>
-                                        ) : (
-                                          <button onClick={() => confirmLinkedinCopied(slot.id)}
-                                            style={{ background:'none', border:'none', cursor:'pointer',
-                                              fontSize:12, color:PLATFORM_COLORS.linkedin, padding:'2px 6px', fontWeight:600 }}>
-                                            ✓ Copied to LinkedIn
-                                          </button>
-                                        )
                                       )}
                                     </div>
                                   </div>
