@@ -2387,6 +2387,9 @@ export default function Dashboard() {
                     const overLimit=charLimit&&charCount>charLimit;
                     const nearLimit=charLimit&&charCount>charLimit*0.9&&!overLimit;
                     const isCopied=copiedKey===ek;
+                    const slotApproved = approvedPosts[slot.id];
+                    const slotDisplayPlatforms = (slot.platforms || activePlatforms).filter(pl => activePlatforms.includes(pl));
+                    const allPlatformsApproved = slotApproved && slotDisplayPlatforms.every(pl => (slotApproved.platforms || []).includes(pl));
                     const platformIncluded = activePlatform==='universal' || slotDisplayPlatforms.includes(activePlatform);
 
                     // Image logic per Python script:
@@ -2405,10 +2408,6 @@ export default function Dashboard() {
                         (['linkedin','facebook'].includes(activePlatform) && slot.isFirstOfWeek)
                       );
                     const showAiImage = hasAiImage && activePlatform !== 'twitter';
-
-                    const slotApproved = approvedPosts[slot.id];
-                    const slotDisplayPlatforms = (slot.platforms || activePlatforms).filter(pl => activePlatforms.includes(pl));
-                    const allPlatformsApproved = slotApproved && slotDisplayPlatforms.every(pl => (slotApproved.platforms || []).includes(pl));
 
                     return (
                       <div key={slot.id} id={`slot-card-${slot.id}`} style={{
@@ -2489,13 +2488,13 @@ export default function Dashboard() {
                           )}
 
                           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
-                            {((slotStatus && !slotStatus._loading) || (slot.platforms||PLATFORMS_LIST).includes('linkedin')) && (
+                            {((slotStatus && !slotStatus._loading) || slotDisplayPlatforms.includes('linkedin')) && (
                               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                                 {slotStatus && !slotStatus._loading && Object.entries(slotStatus).map(([plat,r])=>(
                                   <StatusChip key={plat} platform={plat} result={r}
                                     onUnschedule={r?.ok ? ()=>unschedulePost(slot.id, plat) : null} />
                                 ))}
-                                {(slot.platforms||PLATFORMS_LIST).includes('linkedin') && (
+                                {slotDisplayPlatforms.includes('linkedin') && (
                                   <LinkedinManualChip
                                     confirmed={!!linkedinManual[slot.id]?.confirmedAt}
                                     onUndo={()=>unconfirmLinkedinCopied(slot.id)}
