@@ -305,7 +305,7 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   const isRG = brand === 'reigrove';
-  const allPlatforms = isRG ? ['linkedin', 'facebook', 'bluesky'] : ['twitter', 'instagram', 'facebook'];
+  const allPlatforms = isRG ? ['linkedin', 'facebook', 'bluesky'] : ['twitter', 'instagram', 'facebook', 'linkedin'];
   const resolvedPlatforms = (requestedPlatforms && requestedPlatforms.length > 0) ? requestedPlatforms : allPlatforms;
   const SYSTEM_PROMPT = isRG ? RG_SYSTEM_PROMPT : INNAGO_SYSTEM_PROMPT;
   const igFooter = isRG ? 'Access these resources at reigrove.com' : 'Read more at innago.com/blog';
